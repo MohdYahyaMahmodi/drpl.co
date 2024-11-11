@@ -1,0 +1,70 @@
+/* Wave Animation */
+.wave-container {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.wave {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-color: #333533;
+  opacity: 0.05;
+  border-radius: 40%;
+  transform-origin: 50% 48%;
+  animation: wave 12s infinite linear;
+  top: 0;
+  left: -50%;
+}
+
+.wave:nth-child(2) {
+  animation-duration: 16s;
+  opacity: 0.03;
+}
+
+.wave:nth-child(3) {
+  animation-duration: 20s;
+  opacity: 0.02;
+}
+
+@keyframes wave {
+  from {
+      transform: rotate(0deg);
+  }
+  to {
+      transform: rotate(360deg);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333533;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #242423;
+}
+
+/* Transitions */
+.modal-enter-active, .modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from, .modal-leave-to {
+  opacity: 0;
+}
