@@ -572,11 +572,39 @@ function appData() {
             
             if (!file) return;
             
-            const chunk = await file.slice(start, end).arrayBuffer();
-            const channel = this.dataChannels.get(peerId);
+            // Break down large retransmission requests into smaller chunks
+            const maxChunkSize = CHUNK_SIZE; // Using the same chunk size as initial transfer
+            let currentStart = start;
             
-            if (channel) {
-                channel.send(chunk);
+            while (currentStart < end) {
+                const currentEnd = Math.min(currentStart + maxChunkSize, end);
+                
+                try {
+                    const chunk = await file.slice(currentStart, currentEnd).arrayBuffer();
+                    const channel = this.dataChannels.get(peerId);
+                    
+                    if (!channel || channel.readyState !== 'open') {
+                        console.error('Data channel not available for retransmission');
+                        return;
+                    }
+        
+                    // Wait if buffer is full
+                    if (channel.bufferedAmount >= MAX_BUFFERED_AMOUNT) {
+                        await new Promise(resolve => {
+                            channel.addEventListener('bufferedamountlow', resolve, { once: true });
+                        });
+                    }
+                    
+                    channel.send(chunk);
+                    currentStart = currentEnd;
+                    
+                    // Small delay between chunks to prevent overwhelming the connection
+                    await new Promise(resolve => setTimeout(resolve, 90));
+                    
+                } catch (error) {
+                    console.error('Error during chunk retransmission:', error);
+                    break;
+                }
             }
         },
 
@@ -754,8 +782,15 @@ function appData() {
                     const missingChunks = this.findMissingChunks(fileData);
                     
                     if (missingChunks.length > 0) {
-                        console.log(`Found ${missingChunks.length} missing chunks. Requesting retransmission...`);
-                        await this.requestMissingChunks(missingChunks, peerId);
+                        // Add a small delay before requesting missing chunks
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // Check again in case chunks arrived during delay
+                        const updatedMissingChunks = this.findMissingChunks(fileData);
+                        if (updatedMissingChunks.length > 0) {
+                            console.log(`Found ${updatedMissingChunks.length} missing chunks. Requesting retransmission...`);
+                            await this.requestMissingChunks(updatedMissingChunks, peerId);
+                        }
                     }
                 }
         
@@ -799,11 +834,14 @@ function appData() {
 
         async requestMissingChunks(missingChunks, peerId) {
             const channel = this.dataChannels.get(peerId);
-            if (!channel) return;
+            if (!channel || channel.readyState !== 'open') return;
         
             for (const chunk of missingChunks) {
+                let success = false;
+                
                 for (let attempt = 0; attempt < CHUNK_RETRY_ATTEMPTS; attempt++) {
                     try {
+                        // Request the chunk
                         channel.send(JSON.stringify({
                             type: 'request-chunk',
                             fileName: this.currentReceivingFileName,
@@ -811,27 +849,44 @@ function appData() {
                             end: chunk.end
                         }));
         
-                        // Wait for chunk or timeout
-                        await Promise.race([
-                            new Promise(resolve => setTimeout(resolve, CHUNK_RETRY_DELAY)),
-                            new Promise(resolve => {
-                                const checkChunk = setInterval(() => {
+                        // Wait for chunk with timeout
+                        success = await Promise.race([
+                            new Promise((resolve) => {
+                                const checkInterval = setInterval(() => {
                                     const fileData = this.fileChunks.get(this.currentReceivingFileName);
-                                    if (fileData.chunks.some(c => c.position >= chunk.start && c.position < chunk.end)) {
-                                        clearInterval(checkChunk);
-                                        resolve();
+                                    if (fileData && fileData.chunks.some(c => 
+                                        c.position >= chunk.start && 
+                                        c.position + c.data.byteLength >= chunk.end
+                                    )) {
+                                        clearInterval(checkInterval);
+                                        resolve(true);
                                     }
                                 }, 100);
-                            })
+                                
+                                // Clear interval after timeout
+                                setTimeout(() => {
+                                    clearInterval(checkInterval);
+                                    resolve(false);
+                                }, CHUNK_RETRY_DELAY);
+                            }),
+                            new Promise(resolve => setTimeout(() => resolve(false), CHUNK_RETRY_DELAY * 2))
                         ]);
         
-                        break; // Success, move to next chunk
+                        if (success) break;
+                        
+                        // Add delay between attempts
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
                     } catch (error) {
-                        console.error(`Failed to receive chunk after attempt ${attempt + 1}`);
-                        if (attempt === CHUNK_RETRY_ATTEMPTS - 1) {
-                            throw new Error('Failed to receive missing chunks after all attempts');
-                        }
+                        console.error(`Failed to receive chunk after attempt ${attempt + 1}:`, error);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
                     }
+                }
+        
+                if (!success) {
+                    console.error(`Failed to receive chunk after all attempts (${chunk.start}-${chunk.end})`);
+                    // Instead of throwing, try to continue with other chunks
+                    continue;
                 }
             }
         },
