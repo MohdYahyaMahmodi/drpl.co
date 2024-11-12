@@ -14,8 +14,8 @@
   position: absolute;
   width: 200%;
   height: 200%;
-  background-color: #333533;
-  opacity: 0.05;
+  background-color: #888888;
+  opacity: 0.15;
   border-radius: 40%;
   transform-origin: 50% 48%;
   animation: wave 12s infinite linear;
