@@ -389,6 +389,8 @@ function appData() {
             const totalFiles = this.selectedFiles.length;
             const totalSize = this.selectedFiles.reduce((acc, file) => acc + file.size, 0);
 
+            console.log(`Starting file transfer to ${this.getPeerName(peerId)}. Total files: ${totalFiles}, Total size: ${totalSize}`);
+
             // Send total transfer metadata
             channel.send(JSON.stringify({
                 type: 'transfer-start',
@@ -400,6 +402,8 @@ function appData() {
             for (let i = 0; i < this.selectedFiles.length; i++) {
                 const file = this.selectedFiles[i];
                 const fileNumber = i + 1;
+
+                console.log(`Sending file ${fileNumber} of ${totalFiles}: ${file.name} (${file.size} bytes)`);
 
                 // Update status for sender
                 this.transferStatus = `Sending file ${fileNumber} of ${totalFiles}`;
@@ -424,6 +428,7 @@ function appData() {
                             const message = JSON.parse(event.data);
                             if (message.type === 'ready-for-file' && message.fileName === file.name) {
                                 channel.removeEventListener('message', checkReceiverReady);
+                                console.log(`Receiver is ready for file: ${file.name}`);
                                 resolve();
                             }
                         } catch (e) { /* Ignore parse errors */ }
@@ -438,8 +443,12 @@ function appData() {
                 while (offset < file.size) {
                     // Check if channel is ready for more data
                     if (channel.bufferedAmount >= MAX_BUFFERED_AMOUNT) {
+                        console.log(`Buffered amount ${channel.bufferedAmount} exceeds MAX_BUFFERED_AMOUNT, waiting...`);
                         await new Promise(resolve => {
-                            channel.addEventListener('bufferedamountlow', resolve, { once: true });
+                            channel.addEventListener('bufferedamountlow', () => {
+                                console.log(`Buffered amount is now low: ${channel.bufferedAmount}`);
+                                resolve();
+                            }, { once: true });
                         });
                     }
 
@@ -455,9 +464,19 @@ function appData() {
                     const fileProgress = Math.round((fileTransferred / file.size) * 100);
                     this.transferProgress = Math.round((fileTransferred + this.getCompletedFilesSize(i)) / totalSize * 100);
                     this.transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
+
+                    console.log(`Sent chunk: ${offset}/${file.size} bytes (${fileProgress}%)`);
+                }
+
+                // Wait until all data has been sent
+                console.log('Waiting for data channel to send all data before sending file-end...');
+                while (channel.bufferedAmount > 0) {
+                    console.log(`Buffered amount: ${channel.bufferedAmount}`);
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
                 // Send end-of-file marker
+                console.log(`Sending file-end message for ${file.name}`);
                 channel.send(JSON.stringify({
                     type: 'file-end',
                     name: file.name,
@@ -472,6 +491,7 @@ function appData() {
                             const message = JSON.parse(event.data);
                             if (message.type === 'file-received' && message.fileName === file.name) {
                                 channel.removeEventListener('message', checkFileComplete);
+                                console.log(`File ${file.name} acknowledged as received by receiver.`);
                                 resolve();
                             }
                         } catch (e) { /* Ignore parse errors */ }
@@ -483,6 +503,7 @@ function appData() {
             // All files sent
             this.transferStatus = 'Transfer Complete!';
             this.transferDetails = `All ${totalFiles} files sent successfully`;
+            console.log('All files sent successfully.');
             setTimeout(() => {
                 this.showProgress = false;
                 this.selectedFiles = [];
@@ -553,6 +574,7 @@ function appData() {
             this.totalTransferSize = metadata.totalSize;
             this.totalTransferFiles = metadata.totalFiles;
             this.transferStatus = 'Preparing to receive files...';
+            console.log(`Initialized transfer: ${metadata.totalFiles} files, ${metadata.totalSize} bytes`);
         },
 
         initializeFileReceiving(metadata, peerId) {
@@ -571,6 +593,8 @@ function appData() {
         
                 this.transferStatus = `Receiving file ${fileNumber} of ${totalFiles}`;
                 this.transferDetails = `${file.name} (${formatFileSize(file.size)})`;
+
+                console.log(`Initialized receiving of file ${fileNumber}: ${file.name} (${file.size} bytes)`);
         
                 // Send ready signal
                 const channel = this.dataChannels.get(peerId);
@@ -579,6 +603,7 @@ function appData() {
                         type: 'ready-for-file',
                         fileName: file.name
                     }));
+                    console.log(`Sent ready-for-file for ${file.name}`);
                 }
         
             } catch (error) {
@@ -652,12 +677,14 @@ function appData() {
                         type: 'file-received',
                         fileName: fileName
                     }));
+                    console.log(`Sent file-received acknowledgment for ${fileName}`);
                 }
         
                 // Check if all files are complete
                 if (this.receivedFiles.length === this.totalTransferFiles) {
                     this.transferStatus = 'Transfer Complete!';
                     this.transferDetails = 'All files received successfully';
+                    console.log('All files received successfully.');
                     
                     setTimeout(() => {
                         this.showProgress = false;
@@ -715,6 +742,8 @@ function appData() {
                 // Add chunk and update size
                 currentFile.chunks.push(chunk);
                 currentFile.size = newSize;
+
+                console.log(`Received chunk: ${newSize}/${currentFile.expectedSize} bytes for file ${currentFile.metadata.name}`);
         
                 // Update progress
                 const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + newSize;
