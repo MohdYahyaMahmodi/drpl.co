@@ -44,6 +44,7 @@ function appData() {
         dataChannels: new Map(), // Stores RTCDataChannel objects
         dataChannelPromises: new Map(), // Stores promises that resolve when data channels open
         fileChunks: new Map(), // Stores incoming file chunks
+        messagePromises: new Map(), // Stores pending promises for messages
 
         // UI state
         peers: [],
@@ -200,12 +201,6 @@ function appData() {
 
             // Set buffer thresholds
             channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
-
-            // Remove undefined function call
-            // channel.onbufferedamountlow = () => {
-            //     // Resume sending data
-            //     sendNextChunk();
-            // };
 
             // Create a promise that resolves when the data channel is open
             const openPromise = new Promise((resolve, reject) => {
@@ -422,19 +417,9 @@ function appData() {
                 }));
 
                 // Wait for receiver to be ready
-                await new Promise(resolve => {
-                    const checkReceiverReady = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-                            if (message.type === 'ready-for-file' && message.fileName === file.name) {
-                                channel.removeEventListener('message', checkReceiverReady);
-                                console.log(`Receiver is ready for file: ${file.name}`);
-                                resolve();
-                            }
-                        } catch (e) { /* Ignore parse errors */ }
-                    };
-                    channel.addEventListener('message', checkReceiverReady);
-                });
+                console.log(`Waiting for receiver to be ready for file: ${file.name}`);
+                await this.waitForMessage('ready-for-file', message => message.fileName === file.name);
+                console.log(`Receiver is ready for file: ${file.name}`);
 
                 // Send file chunks
                 let offset = 0;
@@ -485,19 +470,9 @@ function appData() {
                 }));
 
                 // Wait for file completion acknowledgment
-                await new Promise(resolve => {
-                    const checkFileComplete = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-                            if (message.type === 'file-received' && message.fileName === file.name) {
-                                channel.removeEventListener('message', checkFileComplete);
-                                console.log(`File ${file.name} acknowledged as received by receiver.`);
-                                resolve();
-                            }
-                        } catch (e) { /* Ignore parse errors */ }
-                    };
-                    channel.addEventListener('message', checkFileComplete);
-                });
+                console.log(`Waiting for file-received acknowledgment for ${file.name}`);
+                await this.waitForMessage('file-received', message => message.fileName === file.name);
+                console.log(`File ${file.name} acknowledged as received by receiver.`);
             }
 
             // All files sent
@@ -543,11 +518,29 @@ function appData() {
             }
         },
 
+        // Wait for specific message type
+        waitForMessage(type, condition) {
+            return new Promise(resolve => {
+                this.messagePromises.set(type, { resolve, condition });
+            });
+        },
+
         // File receiving
         handleDataChannelMessage(message, peerId) {
             try {
                 const parsedMessage = typeof message === 'string' ? JSON.parse(message) : message;
-                
+                console.log(`Received message of type ${parsedMessage.type}:`, parsedMessage);
+
+                // Check for pending promises
+                const pending = this.messagePromises.get(parsedMessage.type);
+                if (pending) {
+                    if (!pending.condition || pending.condition(parsedMessage)) {
+                        this.messagePromises.delete(parsedMessage.type);
+                        pending.resolve(parsedMessage);
+                        return;
+                    }
+                }
+
                 switch (parsedMessage.type) {
                     case 'transfer-start':
                         this.initializeTransfer(parsedMessage);
@@ -580,7 +573,7 @@ function appData() {
         initializeFileReceiving(metadata, peerId) {
             try {
                 const { file, fileNumber, totalFiles } = metadata;
-                
+
                 // Set up for new file
                 this.currentReceivingFileName = file.name;
                 this.fileChunks.set(file.name, {
@@ -590,12 +583,12 @@ function appData() {
                     isComplete: false,
                     expectedSize: file.size
                 });
-        
+
                 this.transferStatus = `Receiving file ${fileNumber} of ${totalFiles}`;
                 this.transferDetails = `${file.name} (${formatFileSize(file.size)})`;
 
                 console.log(`Initialized receiving of file ${fileNumber}: ${file.name} (${file.size} bytes)`);
-        
+
                 // Send ready signal
                 const channel = this.dataChannels.get(peerId);
                 if (channel) {
@@ -605,13 +598,13 @@ function appData() {
                     }));
                     console.log(`Sent ready-for-file for ${file.name}`);
                 }
-        
+
             } catch (error) {
                 console.error('Error initializing file receiving:', error);
                 toastr.error('Failed to initialize file transfer', 'Transfer Error');
             }
         },
-        
+
         finalizeFile(fileName) {
             try {
                 const fileData = this.fileChunks.get(fileName);
@@ -619,12 +612,12 @@ function appData() {
                     console.error(`No file data found for ${fileName}`);
                     return;
                 }
-        
+
                 if (fileData.isComplete) {
                     console.log(`File ${fileName} already finalized`);
                     return;
                 }
-        
+
                 // Verify size before creating blob
                 const totalSize = fileData.chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
                 if (totalSize !== fileData.expectedSize) {
@@ -636,17 +629,17 @@ function appData() {
                         return;
                     }
                 }
-        
+
                 // Create blob with explicit type and encoding
                 const blob = new Blob(fileData.chunks, { 
                     type: fileData.metadata.type || 'application/octet-stream'
                 });
-        
+
                 // Final size check
                 if (blob.size !== fileData.expectedSize) {
                     console.warn(`Blob size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${blob.size}`);
                 }
-        
+
                 const url = URL.createObjectURL(blob);
                 const completeFile = {
                     name: fileName,
@@ -656,7 +649,7 @@ function appData() {
                     url: url,
                     blob: blob
                 };
-        
+
                 this.receivedFiles.push(completeFile);
                 fileData.isComplete = true;
                 
@@ -666,10 +659,10 @@ function appData() {
                     actualSize: blob.size,
                     type: fileData.metadata.type
                 });
-        
+
                 // Clean up chunks to free memory
                 this.fileChunks.delete(fileName);
-        
+
                 // Send acknowledgment
                 const channel = this.dataChannels.get(this.receivingDetails.peer.id);
                 if (channel) {
@@ -679,7 +672,7 @@ function appData() {
                     }));
                     console.log(`Sent file-received acknowledgment for ${fileName}`);
                 }
-        
+
                 // Check if all files are complete
                 if (this.receivedFiles.length === this.totalTransferFiles) {
                     this.transferStatus = 'Transfer Complete!';
@@ -693,7 +686,7 @@ function appData() {
                         toastr.success('Files received successfully.', 'Transfer Complete');
                     }, 1000);
                 }
-        
+
             } catch (error) {
                 console.error(`Error finalizing file ${fileName}:`, error);
                 toastr.error(`Failed to process file ${fileName}`, 'File Error');
@@ -707,7 +700,7 @@ function appData() {
                     console.warn('Received chunk but transfer not initialized');
                     return;
                 }
-        
+
                 // If no current file, try to find the next incomplete file
                 if (!this.currentReceivingFileName) {
                     const nextFile = Array.from(this.fileChunks.entries())
@@ -721,14 +714,14 @@ function appData() {
                         return;
                     }
                 }
-        
+
                 // Get current file data
                 const fileData = this.fileChunks.get(this.currentReceivingFileName);
                 if (!fileData) {
                     console.error('No file data found for:', this.currentReceivingFileName);
                     return;
                 }
-        
+
                 // Process chunk for current file
                 const currentFile = fileData;
                 
@@ -738,17 +731,17 @@ function appData() {
                     console.warn(`Chunk would exceed expected file size for ${this.currentReceivingFileName}`);
                     return;
                 }
-        
+
                 // Add chunk and update size
                 currentFile.chunks.push(chunk);
                 currentFile.size = newSize;
 
                 console.log(`Received chunk: ${newSize}/${currentFile.expectedSize} bytes for file ${currentFile.metadata.name}`);
-        
+
                 // Update progress
                 const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + newSize;
                 const totalSize = this.totalTransferSize;
-        
+
                 // Calculate both individual and total progress
                 const fileProgress = Math.round((currentFile.size / currentFile.expectedSize) * 100);
                 this.transferProgress = Math.round((totalReceived / totalSize) * 100);
@@ -756,13 +749,13 @@ function appData() {
                 // Update status with both file and total progress
                 this.transferDetails = `File ${currentFile.metadata.name}: ${fileProgress}% (${formatFileSize(currentFile.size)} of ${formatFileSize(currentFile.expectedSize)})`;
                 this.transferStatus = `Overall Progress: ${this.transferProgress}%`;
-        
+
                 // Check if current file is complete
                 if (currentFile.size >= currentFile.expectedSize) {
                     console.log(`File ${currentFile.metadata.name} received completely.`);
                     this.finalizeFile(this.currentReceivingFileName);
                 }
-        
+
             } catch (error) {
                 console.error('Error handling file chunk:', error);
                 toastr.error('Error processing file chunk', 'Transfer Error');
