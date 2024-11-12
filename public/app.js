@@ -29,10 +29,9 @@ function detectDeviceType() {
     return 'desktop';
 }
 
-// File transfer chunk size and buffer thresholds
-const CHUNK_SIZE = 16 * 1024; // 16 KB
-const MAX_BUFFERED_AMOUNT = 512 * 1024; // 512 KB
-const BUFFERED_AMOUNT_LOW_THRESHOLD = 128 * 1024; // 128 KB
+// File transfer chunk size and partition size
+const CHUNK_SIZE = 64 * 1024; // 64 KB
+const PARTITION_SIZE = 1 * 1024 * 1024; // 1 MB
 
 // Main application data and logic
 function appData() {
@@ -128,7 +127,7 @@ function appData() {
 
             // Handle peer disconnection
             this.socket.on('peer-disconnected', (peerId) => {
-                const disconnectedPeer = this.peers.find(peer => peer.id === peerId);
+                const disconnectedPeer = this.peers.find(p => p.id === peerId);
                 this.peers = this.peers.filter(peer => peer.id !== peerId);
                 console.log('Peer disconnected:', disconnectedPeer ? disconnectedPeer.name : peerId);
                 toastr.error(`Peer ${disconnectedPeer ? disconnectedPeer.name : peerId} disconnected.`, 'Peer Disconnected');
@@ -198,9 +197,6 @@ function appData() {
         // WebRTC data channel setup
         setupDataChannel(channel, peerId) {
             channel.binaryType = 'arraybuffer';
-
-            // Set buffer thresholds
-            channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
 
             // Create a promise that resolves when the data channel is open
             const openPromise = new Promise((resolve, reject) => {
@@ -421,38 +417,47 @@ function appData() {
                 await this.waitForMessage('ready-for-file', message => message.fileName === file.name);
                 console.log(`Receiver is ready for file: ${file.name}`);
 
-                // Send file chunks
+                // Send file in partitions
                 let offset = 0;
                 let fileTransferred = 0;
 
                 while (offset < file.size) {
-                    // Check if channel is ready for more data
-                    while (channel.bufferedAmount >= MAX_BUFFERED_AMOUNT) {
-                        console.log(`Buffered amount ${channel.bufferedAmount} exceeds MAX_BUFFERED_AMOUNT, waiting...`);
-                        await new Promise(resolve => setTimeout(resolve, 100)); // Wait for 100ms
+                    // Determine partition size
+                    const partitionSize = Math.min(PARTITION_SIZE, file.size - offset);
+                    const partitionEnd = offset + partitionSize;
+
+                    console.log(`Starting new partition from offset ${offset} to ${partitionEnd} for ${file.name}`);
+
+                    while (offset < partitionEnd) {
+                        const chunkSize = Math.min(CHUNK_SIZE, partitionEnd - offset);
+                        const chunk = file.slice(offset, offset + chunkSize);
+                        const buffer = await chunk.arrayBuffer();
+
+                        channel.send(buffer);
+                        offset += buffer.byteLength;
+                        fileTransferred += buffer.byteLength;
+
+                        // Update progress for current file
+                        const fileProgress = Math.round((fileTransferred / file.size) * 100);
+                        this.transferProgress = Math.round((fileTransferred + this.getCompletedFilesSize(i)) / totalSize * 100);
+                        this.transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
+
+                        // Optional: Log progress
+                        console.log(`Sent chunk: ${offset}/${file.size} bytes (${fileProgress}%)`);
                     }
 
-                    const chunkSize = Math.min(CHUNK_SIZE, file.size - offset);
-                    const chunk = file.slice(offset, offset + chunkSize);
-                    const buffer = await chunk.arrayBuffer();
+                    // Send partition end message
+                    console.log(`Sending partition-end message at offset ${offset} for ${file.name}`);
+                    channel.send(JSON.stringify({
+                        type: 'partition-end',
+                        fileName: file.name,
+                        offset: offset
+                    }));
 
-                    channel.send(buffer);
-                    offset += buffer.byteLength;
-                    fileTransferred += buffer.byteLength;
-
-                    // Update progress for current file
-                    const fileProgress = Math.round((fileTransferred / file.size) * 100);
-                    this.transferProgress = Math.round((fileTransferred + this.getCompletedFilesSize(i)) / totalSize * 100);
-                    this.transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
-
-                    console.log(`Sent chunk: ${offset}/${file.size} bytes (${fileProgress}%)`);
-                }
-
-                // Wait until all data has been sent
-                console.log('Waiting for data channel to send all data before sending file-end...');
-                while (channel.bufferedAmount > 0) {
-                    console.log(`Buffered amount: ${channel.bufferedAmount}`);
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Wait for receiver's acknowledgment
+                    console.log(`Waiting for partition-received acknowledgment for offset ${offset} of ${file.name}`);
+                    await this.waitForMessage('partition-received', message => message.fileName === file.name && message.offset === offset);
+                    console.log(`Partition ending at offset ${offset} acknowledged by receiver.`);
                 }
 
                 // Send end-of-file marker
@@ -543,8 +548,11 @@ function appData() {
                     case 'file-metadata':
                         this.initializeFileReceiving(parsedMessage, peerId);
                         break;
+                    case 'partition-end':
+                        this.handlePartitionEnd(parsedMessage, peerId);
+                        break;
                     case 'file-end':
-                        this.finalizeFile(parsedMessage.name, parsedMessage.fileNumber, parsedMessage.totalFiles);
+                        this.finalizeFile(parsedMessage.name);
                         break;
                     default:
                         console.log('Unknown message type:', parsedMessage.type);
@@ -600,6 +608,29 @@ function appData() {
             }
         },
 
+        handlePartitionEnd(message, peerId) {
+            const { fileName, offset } = message;
+            const fileData = this.fileChunks.get(fileName);
+
+            if (!fileData) {
+                console.error(`No file data found for ${fileName}`);
+                return;
+            }
+
+            // Send acknowledgment to sender
+            const channel = this.dataChannels.get(peerId);
+            if (channel) {
+                channel.send(JSON.stringify({
+                    type: 'partition-received',
+                    fileName: fileName,
+                    offset: offset
+                }));
+                console.log(`Sent partition-received acknowledgment for offset ${offset} of ${fileName}`);
+            } else {
+                console.error('No data channel found for peer', peerId);
+            }
+        },
+
         finalizeFile(fileName) {
             try {
                 const fileData = this.fileChunks.get(fileName);
@@ -608,24 +639,15 @@ function appData() {
                     return;
                 }
 
-                if (fileData.isComplete) {
-                    console.log(`File ${fileName} already finalized`);
+                // Verify size before creating blob
+                const totalSize = fileData.size;
+                if (totalSize !== fileData.expectedSize) {
+                    console.warn(`Size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${totalSize}`);
+                    // Wait for more data if necessary
                     return;
                 }
 
-                // Verify size before creating blob
-                const totalSize = fileData.chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
-                if (totalSize !== fileData.expectedSize) {
-                    console.warn(`Size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${totalSize}`);
-
-                    // If size is smaller, wait for more chunks
-                    if (totalSize < fileData.expectedSize) {
-                        console.log(`Waiting for more chunks for ${fileName}`);
-                        return;
-                    }
-                }
-
-                // Create blob with explicit type and encoding
+                // Create blob
                 const blob = new Blob(fileData.chunks, {
                     type: fileData.metadata.type || 'application/octet-stream'
                 });
@@ -647,13 +669,6 @@ function appData() {
 
                 this.receivedFiles.push(completeFile);
                 fileData.isComplete = true;
-
-                // Log completion
-                console.log(`File ${fileName} finalized successfully`, {
-                    expectedSize: fileData.expectedSize,
-                    actualSize: blob.size,
-                    type: fileData.metadata.type
-                });
 
                 // Clean up chunks to free memory
                 this.fileChunks.delete(fileName);
@@ -696,20 +711,6 @@ function appData() {
                     return;
                 }
 
-                // If no current file, try to find the next incomplete file
-                if (!this.currentReceivingFileName) {
-                    const nextFile = Array.from(this.fileChunks.entries())
-                        .find(([_, data]) => !data.isComplete);
-
-                    if (nextFile) {
-                        this.currentReceivingFileName = nextFile[0];
-                        console.log('Resuming transfer with file:', this.currentReceivingFileName);
-                    } else {
-                        console.warn('No incomplete files found for chunk');
-                        return;
-                    }
-                }
-
                 // Get current file data
                 const fileData = this.fileChunks.get(this.currentReceivingFileName);
                 if (!fileData) {
@@ -717,39 +718,21 @@ function appData() {
                     return;
                 }
 
-                // Process chunk for current file
-                const currentFile = fileData;
-
-                // Verify we haven't exceeded expected size
-                const newSize = currentFile.size + chunk.byteLength;
-                if (newSize > currentFile.expectedSize) {
-                    console.warn(`Chunk would exceed expected file size for ${this.currentReceivingFileName}`);
-                    return;
-                }
-
-                // Add chunk and update size
-                currentFile.chunks.push(chunk);
-                currentFile.size = newSize;
-
-                console.log(`Received chunk: ${newSize}/${currentFile.expectedSize} bytes for file ${currentFile.metadata.name}`);
+                // Process chunk
+                fileData.chunks.push(chunk);
+                fileData.size += chunk.byteLength;
 
                 // Update progress
-                const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + newSize;
+                const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + fileData.size;
                 const totalSize = this.totalTransferSize;
 
-                // Calculate both individual and total progress
-                const fileProgress = Math.round((currentFile.size / currentFile.expectedSize) * 100);
+                const fileProgress = Math.round((fileData.size / fileData.expectedSize) * 100);
                 this.transferProgress = Math.round((totalReceived / totalSize) * 100);
 
-                // Update status with both file and total progress
-                this.transferDetails = `File ${currentFile.metadata.name}: ${fileProgress}% (${formatFileSize(currentFile.size)} of ${formatFileSize(currentFile.expectedSize)})`;
+                this.transferDetails = `File ${fileData.metadata.name}: ${fileProgress}% (${formatFileSize(fileData.size)} of ${formatFileSize(fileData.expectedSize)})`;
                 this.transferStatus = `Overall Progress: ${this.transferProgress}%`;
 
-                // Check if current file is complete
-                if (currentFile.size >= currentFile.expectedSize) {
-                    console.log(`File ${currentFile.metadata.name} received completely.`);
-                    this.finalizeFile(this.currentReceivingFileName);
-                }
+                // Note: Do not finalize the file here; wait for 'file-end' message
 
             } catch (error) {
                 console.error('Error handling file chunk:', error);
