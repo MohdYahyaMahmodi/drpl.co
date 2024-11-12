@@ -29,9 +29,10 @@ function detectDeviceType() {
     return 'desktop';
 }
 
-// File transfer chunk size (32 KB)
-const CHUNK_SIZE = 32 * 1024; // 32 KB
-
+// File transfer chunk size and buffer thresholds
+const CHUNK_SIZE = 16 * 1024; // 16 KB
+const MAX_BUFFERED_AMOUNT = 4 * 1024 * 1024; // 4 MB
+const BUFFERED_AMOUNT_LOW_THRESHOLD = 1 * 1024 * 1024; // 1 MB
 
 // Main application data and logic
 function appData() {
@@ -198,14 +199,13 @@ function appData() {
             channel.binaryType = 'arraybuffer';
 
             // Set buffer thresholds
-            const MAX_BUFFERED_AMOUNT = 16 * 1024 * 1024; // 16 MB
-            const BUFFERED_AMOUNT_LOW_THRESHOLD = 8 * 1024 * 1024; // 8 MB
             channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
 
-            channel.onbufferedamountlow = () => {
-                // Resume sending data
-                sendNextChunk();
-            };
+            // Remove undefined function call
+            // channel.onbufferedamountlow = () => {
+            //     // Resume sending data
+            //     sendNextChunk();
+            // };
 
             // Create a promise that resolves when the data channel is open
             const openPromise = new Promise((resolve, reject) => {
@@ -249,7 +249,10 @@ function appData() {
             if (!this.peerConnections.has(peer.id)) {
                 try {
                     const pc = await this.createPeerConnection(peer.id);
-                    const channel = pc.createDataChannel('fileTransfer');
+                    const channel = pc.createDataChannel('fileTransfer', {
+                        ordered: true,
+                        maxRetransmits: null // Ensure reliable ordered delivery
+                    });
                     this.setupDataChannel(channel, peer.id);
 
                     const offer = await pc.createOffer();
@@ -373,7 +376,7 @@ function appData() {
         // Start the actual file transfer after acceptance
         async startFileTransfer() {
             const peerId = this.selectedPeer.id;
-        
+
             // Wait for data channel to open
             const channel = await this.waitForDataChannel(peerId);
             if (!channel) {
@@ -382,26 +385,26 @@ function appData() {
                 toastr.error('Data channel is not open. Failed to send files.', 'Transfer Failed');
                 return;
             }
-        
+
             const totalFiles = this.selectedFiles.length;
             const totalSize = this.selectedFiles.reduce((acc, file) => acc + file.size, 0);
-        
+
             // Send total transfer metadata
             channel.send(JSON.stringify({
                 type: 'transfer-start',
                 totalFiles: totalFiles,
                 totalSize: totalSize
             }));
-        
+
             // Process files sequentially
             for (let i = 0; i < this.selectedFiles.length; i++) {
                 const file = this.selectedFiles[i];
                 const fileNumber = i + 1;
-        
+
                 // Update status for sender
                 this.transferStatus = `Sending file ${fileNumber} of ${totalFiles}`;
                 this.transferDetails = `${file.name} (${formatFileSize(file.size)})`;
-        
+
                 // Send individual file metadata
                 channel.send(JSON.stringify({
                     type: 'file-metadata',
@@ -413,7 +416,7 @@ function appData() {
                     fileNumber: fileNumber,
                     totalFiles: totalFiles
                 }));
-        
+
                 // Wait for receiver to be ready
                 await new Promise(resolve => {
                     const checkReceiverReady = (event) => {
@@ -423,37 +426,37 @@ function appData() {
                                 channel.removeEventListener('message', checkReceiverReady);
                                 resolve();
                             }
-                        } catch (e) {}
+                        } catch (e) { /* Ignore parse errors */ }
                     };
                     channel.addEventListener('message', checkReceiverReady);
                 });
-        
+
                 // Send file chunks
                 let offset = 0;
                 let fileTransferred = 0;
-        
+
                 while (offset < file.size) {
                     // Check if channel is ready for more data
-                    if (channel.bufferedAmount > channel.bufferedAmountLowThreshold) {
+                    if (channel.bufferedAmount >= MAX_BUFFERED_AMOUNT) {
                         await new Promise(resolve => {
                             channel.addEventListener('bufferedamountlow', resolve, { once: true });
                         });
                     }
-        
+
                     const chunkSize = Math.min(CHUNK_SIZE, file.size - offset);
                     const chunk = file.slice(offset, offset + chunkSize);
                     const buffer = await chunk.arrayBuffer();
-        
+
                     channel.send(buffer);
                     offset += buffer.byteLength;
                     fileTransferred += buffer.byteLength;
-        
+
                     // Update progress for current file
                     const fileProgress = Math.round((fileTransferred / file.size) * 100);
                     this.transferProgress = Math.round((fileTransferred + this.getCompletedFilesSize(i)) / totalSize * 100);
                     this.transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
                 }
-        
+
                 // Send end-of-file marker
                 channel.send(JSON.stringify({
                     type: 'file-end',
@@ -461,7 +464,7 @@ function appData() {
                     fileNumber: fileNumber,
                     totalFiles: totalFiles
                 }));
-        
+
                 // Wait for file completion acknowledgment
                 await new Promise(resolve => {
                     const checkFileComplete = (event) => {
@@ -471,12 +474,12 @@ function appData() {
                                 channel.removeEventListener('message', checkFileComplete);
                                 resolve();
                             }
-                        } catch (e) {}
+                        } catch (e) { /* Ignore parse errors */ }
                     };
                     channel.addEventListener('message', checkFileComplete);
                 });
             }
-        
+
             // All files sent
             this.transferStatus = 'Transfer Complete!';
             this.transferDetails = `All ${totalFiles} files sent successfully`;
@@ -652,8 +655,7 @@ function appData() {
                 }
         
                 // Check if all files are complete
-                const remainingFiles = Array.from(this.fileChunks.values()).filter(f => !f.isComplete);
-                if (remainingFiles.length === 0) {
+                if (this.receivedFiles.length === this.totalTransferFiles) {
                     this.transferStatus = 'Transfer Complete!';
                     this.transferDetails = 'All files received successfully';
                     
@@ -663,9 +665,6 @@ function appData() {
                         this.showFilePreview = true;
                         toastr.success('Files received successfully.', 'Transfer Complete');
                     }, 1000);
-                } else {
-                    // Move to next file
-                    this.currentReceivingFileName = remainingFiles[0]?.metadata?.name;
                 }
         
             } catch (error) {
@@ -703,22 +702,8 @@ function appData() {
                     return;
                 }
         
-                // Check if we need to move to next file
-                if (fileData.isComplete) {
-                    const nextFile = Array.from(this.fileChunks.entries())
-                        .find(([_, data]) => !data.isComplete);
-                    
-                    if (nextFile) {
-                        this.currentReceivingFileName = nextFile[0];
-                        console.log('Moving to next file:', this.currentReceivingFileName);
-                    } else {
-                        console.warn('All files complete but received additional chunk');
-                        return;
-                    }
-                }
-        
                 // Process chunk for current file
-                const currentFile = this.fileChunks.get(this.currentReceivingFileName);
+                const currentFile = fileData;
                 
                 // Verify we haven't exceeded expected size
                 const newSize = currentFile.size + chunk.byteLength;
@@ -732,9 +717,8 @@ function appData() {
                 currentFile.size = newSize;
         
                 // Update progress
-                const totalReceived = Array.from(this.fileChunks.values())
-                    .reduce((acc, file) => acc + file.size, 0);
-                const totalSize = this.receivingDetails.totalSize;
+                const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + newSize;
+                const totalSize = this.totalTransferSize;
         
                 // Calculate both individual and total progress
                 const fileProgress = Math.round((currentFile.size / currentFile.expectedSize) * 100);
@@ -744,12 +728,17 @@ function appData() {
                 this.transferDetails = `File ${currentFile.metadata.name}: ${fileProgress}% (${formatFileSize(currentFile.size)} of ${formatFileSize(currentFile.expectedSize)})`;
                 this.transferStatus = `Overall Progress: ${this.transferProgress}%`;
         
+                // Check if current file is complete
+                if (currentFile.size >= currentFile.expectedSize) {
+                    console.log(`File ${currentFile.metadata.name} received completely.`);
+                    this.finalizeFile(this.currentReceivingFileName);
+                }
+        
             } catch (error) {
                 console.error('Error handling file chunk:', error);
                 toastr.error('Error processing file chunk', 'Transfer Error');
             }
         },
-
 
         resetTransferState() {
             this.isReceivingFile = false;
@@ -801,21 +790,6 @@ function appData() {
             }
         },
 
-       // New method to download all files separately
-       downloadAllFiles() {
-            if (this.receivedFiles.length === this.totalTransferFiles) {
-                this.transferStatus = 'Transfer Complete!';
-                this.transferDetails = 'All files received successfully';
-                
-                setTimeout(() => {
-                    this.showProgress = false;
-                    this.isReceivingFile = false;
-                    this.showFilePreview = true;
-                    toastr.success('Files received successfully.', 'Transfer Complete');
-                }, 1000);
-            }
-        },
-
         // File download handling
         downloadFile(file) {
             if (!file || !file.url) return;
@@ -829,17 +803,7 @@ function appData() {
         },
 
         async downloadAllFilesAsZip() {
-            if (this.receivedFiles.length === this.totalTransferFiles) {
-                this.transferStatus = 'Transfer Complete!';
-                this.transferDetails = 'All files received successfully';
-                
-                setTimeout(() => {
-                    this.showProgress = false;
-                    this.isReceivingFile = false;
-                    this.showFilePreview = true;
-                    toastr.success('Files received successfully.', 'Transfer Complete');
-                }, 1000);
-            }
+            if (this.receivedFiles.length === 0) return;
         
             try {
                 const zip = new JSZip();
