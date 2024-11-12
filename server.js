@@ -2,89 +2,104 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const path = require('path');
-const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
-const validator = require('validator');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server, {
-  cors: {
-    origin: [
-      'http://localhost:7865',
-      'https://drpl.co',
-    ],
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
+const io = socketIO(server);
 
-app.use(helmet());
-app.use(express.static('public'));
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
 
+// Store connected peers
 const peers = new Map();
 
+// Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
+    console.log(`Client connected: ${socket.id}`);
 
-  socket.on('register', (data) => {
-    const deviceName = validator.escape(data.deviceName || 'Device');
-    const deviceType = validator.escape(data.deviceType || 'unknown');
+    socket.on('register', (data) => {
+        const peerId = uuidv4();
+        peers.set(peerId, {
+            id: peerId,
+            socketId: socket.id,
+            name: data.deviceName,
+            type: data.deviceType
+        });
 
-    const peerId = uuidv4();
-    peers.set(peerId, { id: peerId, socketId: socket.id, name: deviceName, type: deviceType });
+        socket.emit('registered', { peerId });
+        broadcastPeers();
+    });
 
-    socket.emit('registered', { peerId });
-    broadcastPeers();
-  });
+    socket.on('discover', () => {
+        broadcastPeers();
+    });
 
-  socket.on('discover', () => {
-    const peerList = Array.from(peers.values()).map(({ id, name, type }) => ({ id, name, type }));
-    socket.emit('peers', peerList);
-  });
+    socket.on('signal', ({ target, signal }) => {
+        const targetPeer = getPeerById(target);
+        if (targetPeer) {
+            io.to(targetPeer.socketId).emit('signal', {
+                peerId: getPeerIdBySocketId(socket.id),
+                signal
+            });
+        }
+    });
 
-  socket.on('signal', (data) => {
-    const { target, signal } = data;
-    const targetPeer = peers.get(target);
-    if (targetPeer) {
-      io.to(targetPeer.socketId).emit('signal', { peer: target, signal });
-    }
-  });
+    socket.on('file-request', (data) => {
+        const targetPeer = getPeerById(data.target);
+        if (targetPeer) {
+            io.to(targetPeer.socketId).emit('file-request', {
+                peerId: getPeerIdBySocketId(socket.id),
+                files: data.files
+            });
+        }
+    });
 
-  socket.on('file-request', (data) => {
-    const { target, files } = data;
-    const targetPeer = peers.get(target);
-    if (targetPeer) {
-      io.to(targetPeer.socketId).emit('file-request', { peerId: socket.id, files });
-    }
-  });
+    socket.on('file-response', (data) => {
+        const targetPeer = getPeerById(data.target);
+        if (targetPeer) {
+            io.to(targetPeer.socketId).emit('file-response', {
+                accepted: data.accepted
+            });
+        }
+    });
 
-  socket.on('file-response', (data) => {
-    const { target, accepted } = data;
-    const targetPeer = peers.get(target);
-    if (targetPeer) {
-      io.to(targetPeer.socketId).emit('file-response', { accepted });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    const peerId = Array.from(peers.keys()).find((key) => peers.get(key).socketId === socket.id);
-    if (peerId) peers.delete(peerId);
-    broadcastPeers();
-    console.log(`Client disconnected: ${socket.id}`);
-  });
+    socket.on('disconnect', () => {
+        const peerId = getPeerIdBySocketId(socket.id);
+        if (peerId) {
+            peers.delete(peerId);
+            broadcastPeers();
+        }
+        console.log(`Client disconnected: ${socket.id}`);
+    });
 });
 
+// Helper functions
 function broadcastPeers() {
-  const peerList = Array.from(peers.values()).map(({ id, name, type }) => ({ id, name, type }));
-  io.emit('peers', peerList);
+    const peerList = Array.from(peers.values()).map(peer => ({
+        id: peer.id,
+        name: peer.name,
+        type: peer.type
+    }));
+    io.emit('peers', peerList);
 }
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+function getPeerById(peerId) {
+    return peers.get(peerId);
+}
 
-server.listen(process.env.PORT || 7865, () => {
-  console.log(`Server running on port ${process.env.PORT || 7865}`);
+function getPeerIdBySocketId(socketId) {
+    for (let [peerId, peer] of peers.entries()) {
+        if (peer.socketId === socketId) {
+            return peerId;
+        }
+    }
+    return null;
+}
+
+// Start server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
