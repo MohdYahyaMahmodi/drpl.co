@@ -1,7 +1,8 @@
 // filetransfer.js
 
 // Constants
-const CHUNK_SIZE = 64 * 1024; // 64 KB
+const CHUNK_SIZE = 16 * 1024; // 16KB chunks - smaller for better flow control
+const MAX_BUFFER_SIZE = 1 * 1024 * 1024; // 1MB buffer limit
 const PARTITION_SIZE = 1 * 1024 * 1024; // 1 MB
 
 // Utility functions
@@ -230,136 +231,87 @@ var FileTransfer = (function() {
     // Start file transfer
     async function startFileTransfer() {
         const peerId = selectedPeer.id;
-
-        // Wait for data channel to open
         const channel = await waitForDataChannel(peerId);
+        
         if (!channel) {
-            console.error('Data channel is not open');
-            transferStatus = 'Failed to send files.';
-            emit('error', { message: 'Data channel is not open. Failed to send files.' });
-            return;
+            throw new Error('Data channel is not open');
         }
-
+    
         const totalFiles = selectedFiles.length;
         const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
-
-        console.log(`Starting file transfer to peer ${peerId}. Total files: ${totalFiles}, Total size: ${totalSize}`);
-
-        // Send total transfer metadata
+    
+        // Send transfer metadata
         channel.send(JSON.stringify({
             type: 'transfer-start',
-            totalFiles: totalFiles,
-            totalSize: totalSize
+            totalFiles,
+            totalSize
         }));
-
-        // Process files sequentially
+    
         for (let i = 0; i < selectedFiles.length; i++) {
             const file = selectedFiles[i];
-            const fileNumber = i + 1;
-
-            console.log(`Sending file ${fileNumber} of ${totalFiles}: ${file.name} (${file.size} bytes)`);
-
-            // Update status for sender
-            transferStatus = `Sending file ${fileNumber} of ${totalFiles}`;
-            transferDetails = `${file.name} (${formatFileSize(file.size)})`;
-
-            emit('transfer-status', {
-                transferStatus,
-                transferDetails,
-                transferProgress
-            });
-
-            // Send individual file metadata
-            channel.send(JSON.stringify({
-                type: 'file-metadata',
-                file: {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type
-                },
-                fileNumber: fileNumber,
-                totalFiles: totalFiles
-            }));
-
-            // Wait for receiver to be ready
-            console.log(`Waiting for receiver to be ready for file: ${file.name}`);
-            await waitForMessage('ready-for-file', message => message.fileName === file.name);
-            console.log(`Receiver is ready for file: ${file.name}`);
-
-            // Send file in partitions
-            let offset = 0;
-            let fileTransferred = 0;
-
-            while (offset < file.size) {
-                // Determine partition size
-                const partitionSize = Math.min(PARTITION_SIZE, file.size - offset);
-                const partitionEnd = offset + partitionSize;
-
-                console.log(`Starting new partition from offset ${offset} to ${partitionEnd} for ${file.name}`);
-
-                while (offset < partitionEnd) {
-                    const chunkSize = Math.min(CHUNK_SIZE, partitionEnd - offset);
-                    const chunk = file.slice(offset, offset + chunkSize);
-                    const buffer = await chunk.arrayBuffer();
-
-                    channel.send(buffer);
-                    offset += buffer.byteLength;
-                    fileTransferred += buffer.byteLength;
-
-                    // Update progress for current file
-                    const fileProgress = Math.round((fileTransferred / file.size) * 100);
-                    transferProgress = Math.round((fileTransferred + getCompletedFilesSize(i)) / totalSize * 100);
-                    transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
-
-                    // Emit progress update
-                    emit('transfer-progress', {
-                        transferStatus,
-                        transferDetails,
-                        transferProgress
-                    });
-
-                    // Optional: Log progress
-                    console.log(`Sent chunk: ${offset}/${file.size} bytes (${fileProgress}%)`);
-                }
-
-                // Send partition end message
-                console.log(`Sending partition-end message at offset ${offset} for ${file.name}`);
-                channel.send(JSON.stringify({
-                    type: 'partition-end',
-                    fileName: file.name,
-                    offset: offset
-                }));
-
-                // Wait for receiver's acknowledgment
-                console.log(`Waiting for partition-received acknowledgment for offset ${offset} of ${file.name}`);
-                await waitForMessage('partition-received', message => message.fileName === file.name && message.offset === offset);
-                console.log(`Partition ending at offset ${offset} acknowledged by receiver.`);
-            }
-
-            // Send end-of-file marker
-            console.log(`Sending file-end message for ${file.name}`);
-            channel.send(JSON.stringify({
-                type: 'file-end',
-                name: file.name,
-                fileNumber: fileNumber,
-                totalFiles: totalFiles
-            }));
-
-            // Wait for file completion acknowledgment
-            console.log(`Waiting for file-received acknowledgment for ${file.name}`);
-            await waitForMessage('file-received', message => message.fileName === file.name);
-            console.log(`File ${file.name} acknowledged as received by receiver.`);
+            await sendFile(file, i + 1, totalFiles, channel);
         }
+    }
 
-        // All files sent
-        transferStatus = 'Transfer Complete!';
-        transferDetails = `All ${totalFiles} files sent successfully`;
-        console.log('All files sent successfully.');
-
-        emit('transfer-complete', {
-            transferStatus,
-            transferDetails
-        });
+    async function sendFile(file, fileNumber, totalFiles, channel) {
+        // Send file metadata
+        channel.send(JSON.stringify({
+            type: 'file-metadata',
+            file: {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            },
+            fileNumber,
+            totalFiles
+        }));
+    
+        // Wait for receiver ready signal
+        await waitForMessage('ready-for-file', msg => msg.fileName === file.name);
+    
+        // Read file as ArrayBuffer
+        const buffer = await file.arrayBuffer();
+        const totalChunks = Math.ceil(buffer.byteLength / CHUNK_SIZE);
+        
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, buffer.byteLength);
+            const chunk = buffer.slice(start, end);
+    
+            // Flow control - wait if buffer is full
+            while (channel.bufferedAmount > MAX_BUFFER_SIZE) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+    
+            // Send chunk with sequence number
+            channel.send(JSON.stringify({
+                type: 'chunk-start',
+                fileName: file.name,
+                chunkIndex,
+                totalChunks
+            }));
+            
+            channel.send(chunk);
+    
+            // Update progress
+            const progress = (chunkIndex + 1) / totalChunks;
+            updateProgress(file, fileNumber, totalFiles, progress);
+            
+            // Wait for chunk acknowledgment
+            await waitForMessage('chunk-received', 
+                msg => msg.fileName === file.name && msg.chunkIndex === chunkIndex);
+        }
+    
+        // Send file completion marker
+        channel.send(JSON.stringify({
+            type: 'file-complete',
+            fileName: file.name,
+            fileNumber,
+            totalFiles
+        }));
+    
+        // Wait for file completion acknowledgment
+        await waitForMessage('file-received', msg => msg.fileName === file.name);
     }
 
     function getCompletedFilesSize(currentIndex) {
@@ -608,45 +560,33 @@ var FileTransfer = (function() {
     }
 
     // Handle file chunk
-    function handleFileChunk(chunk, peerId) {
-        try {
-            // Check if we're in receiving state
-            if (!isReceivingFile) {
-                console.warn('Received chunk but transfer not initialized');
-                return;
-            }
-
-            // Get current file data
-            const fileData = fileChunks.get(currentReceivingFileName);
-            if (!fileData) {
-                console.error('No file data found for:', currentReceivingFileName);
-                return;
-            }
-
-            // Process chunk
-            fileData.chunks.push(chunk);
-            fileData.size += chunk.byteLength;
-
-            // Update progress
-            const totalReceived = receivedFiles.reduce((acc, file) => acc + file.size, 0) + fileData.size;
-            const totalSize = totalTransferSize;
-
-            const fileProgress = Math.round((fileData.size / fileData.expectedSize) * 100);
-            transferProgress = Math.round((totalReceived / totalSize) * 100);
-
-            transferDetails = `File ${fileData.metadata.name}: ${fileProgress}% (${formatFileSize(fileData.size)} of ${formatFileSize(fileData.expectedSize)})`;
-            transferStatus = `Overall Progress: ${transferProgress}%`;
-
-            emit('transfer-progress', {
-                transferStatus,
-                transferDetails,
-                transferProgress
-            });
-
-        } catch (error) {
-            console.error('Error handling file chunk:', error);
-            emit('error', { message: 'Error processing file chunk', error });
+    function handleFileChunk(data, metadata) {
+        const fileData = fileChunks.get(metadata.fileName);
+        if (!fileData) return;
+    
+        const chunk = new Uint8Array(data);
+        fileData.chunks[metadata.chunkIndex] = chunk;
+        fileData.receivedChunks++;
+    
+        // Calculate progress
+        const progress = fileData.receivedChunks / metadata.totalChunks;
+        updateProgress(fileData.metadata, metadata.fileNumber, metadata.totalFiles, progress);
+    
+        // Check if file is complete
+        if (fileData.receivedChunks === metadata.totalChunks) {
+            finalizeFile(metadata.fileName);
         }
+    }
+
+    function updateProgress(file, fileNumber, totalFiles, progress) {
+        const fileProgress = Math.round(progress * 100);
+        const transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
+        
+        emit('transfer-progress', {
+            transferStatus: `Transferring file ${fileNumber} of ${totalFiles}`,
+            transferDetails,
+            transferProgress: fileProgress
+        });
     }
 
     // Cleanup connections

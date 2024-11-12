@@ -1,5 +1,3 @@
-// ui.js
-
 // Word lists for generating device names
 const adjectives = ['Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver', 'Crystal', 'Cosmic', 'Electric', 'Mystic'];
 const nouns = ['Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger', 'Falcon', 'Panther', 'Hawk', 'Bear'];
@@ -58,22 +56,34 @@ function appData() {
 
         // Initialize the application
         init() {
+            // Setup WebSocket connection
             FileTransfer.setupWebSocket(this.deviceName, this.deviceType);
 
-            // Listen to events from FileTransfer
+            // Basic connection events
             FileTransfer.on('registered', ({ peerId }) => {
-                // Do something with peerId
-                // this.peerId = peerId; // not in UI
+                console.log('Registered with peer ID:', peerId);
             });
 
             FileTransfer.on('peers', (peers) => {
                 this.peers = peers;
             });
 
+            // File request handling
             FileTransfer.on('incoming-file-request', (details) => {
                 this.receivingDetails = details;
                 this.showIncomingRequest = true;
-                toastr.info(`${this.getPeerName(details.peer.id) || 'A user'} wants to send you files.`, 'Incoming File Transfer');
+                toastr.info(
+                    `${this.getPeerName(details.peer.id) || 'A user'} wants to send you files.`,
+                    'Incoming File Transfer'
+                );
+            });
+
+            // Transfer status events
+            FileTransfer.on('transfer-initialized', ({ transferStatus, transferDetails }) => {
+                this.transferStatus = transferStatus;
+                this.transferDetails = transferDetails;
+                this.transferProgress = 0;
+                this.showProgress = true;
             });
 
             FileTransfer.on('transfer-status', ({ transferStatus, transferDetails, transferProgress }) => {
@@ -87,6 +97,43 @@ function appData() {
                 this.transferStatus = transferStatus;
                 this.transferDetails = transferDetails;
                 this.transferProgress = transferProgress;
+                this.showProgress = true;
+            });
+
+            // Chunk handling events
+            FileTransfer.on('chunk-error', ({ fileName, chunkIndex, error }) => {
+                toastr.error(
+                    `Error transferring part of file ${fileName}. Retrying...`,
+                    'Transfer Error'
+                );
+                console.error('Chunk error:', error);
+            });
+
+            FileTransfer.on('chunk-retry', ({ fileName, chunkIndex, attempt }) => {
+                if (attempt > 1) {
+                    toastr.warning(
+                        `Retrying transfer for ${fileName} (Attempt ${attempt})`,
+                        'Retrying Transfer'
+                    );
+                }
+            });
+
+            FileTransfer.on('chunk-retry-limit-exceeded', ({ fileName }) => {
+                toastr.error(
+                    `Failed to transfer ${fileName} after multiple attempts. Please try again.`,
+                    'Transfer Failed'
+                );
+                this.showProgress = false;
+            });
+
+            // Transfer state events
+            FileTransfer.on('transfer-paused', ({ reason }) => {
+                this.transferStatus = 'Transfer paused: ' + reason;
+                toastr.info(reason, 'Transfer Paused');
+            });
+
+            FileTransfer.on('transfer-resumed', () => {
+                toastr.success('Transfer resumed', 'Transfer Resumed');
             });
 
             FileTransfer.on('transfer-complete', ({ transferStatus, transferDetails, receivedFiles }) => {
@@ -95,8 +142,21 @@ function appData() {
                 this.receivedFiles = receivedFiles || this.receivedFiles;
                 this.showProgress = false;
                 this.isReceivingFile = false;
-                this.showFilePreview = true;
-                toastr.success('File transfer complete.', 'Transfer Complete');
+                
+                if (receivedFiles && receivedFiles.length > 0) {
+                    this.showFilePreview = true;
+                    this.currentFileIndex = 0;
+                }
+                
+                const fileCount = receivedFiles ? receivedFiles.length : this.selectedFiles.length;
+                const filesWord = fileCount === 1 ? 'file' : 'files';
+                toastr.success(
+                    `Successfully transferred ${fileCount} ${filesWord}`,
+                    'Transfer Complete'
+                );
+                
+                this.selectedFiles = [];
+                this.selectedPeer = null;
             });
 
             FileTransfer.on('transfer-declined', ({ message }) => {
@@ -107,40 +167,74 @@ function appData() {
                 }, 2000);
             });
 
+            // Connection status events
+            FileTransfer.on('connection-status', ({ status }) => {
+                switch(status) {
+                    case 'slow':
+                        toastr.warning(
+                            'Connection appears to be slow. Transfer may take longer.',
+                            'Slow Connection'
+                        );
+                        break;
+                    case 'unstable':
+                        toastr.warning(
+                            'Connection is unstable. Transfer may pause.',
+                            'Unstable Connection'
+                        );
+                        break;
+                    case 'restored':
+                        toastr.success('Connection restored.', 'Connection Status');
+                        break;
+                }
+            });
+
             FileTransfer.on('peer-disconnected', (peerId) => {
-                // Update peers list
                 this.peers = this.peers.filter(peer => peer.id !== peerId);
                 console.log('Peer disconnected:', peerId);
-                // Show toastr message
-                toastr.error(`Peer ${peerId} disconnected.`, 'Peer Disconnected');
+                toastr.error(`Peer ${this.getPeerName(peerId)} disconnected.`, 'Peer Disconnected');
             });
 
-            FileTransfer.on('error', ({ message }) => {
-                toastr.error(message, 'Error');
+            // Error handling
+            FileTransfer.on('error', ({ message, error, fatal }) => {
+                if (fatal) {
+                    toastr.error(message, 'Fatal Error');
+                    this.showProgress = false;
+                    this.showFileTransfer = false;
+                    this.selectedFiles = [];
+                    this.selectedPeer = null;
+                } else {
+                    toastr.error(message, 'Error');
+                }
+                console.error('Transfer error:', error);
             });
 
+            FileTransfer.on('transfer-error-recoverable', ({ message }) => {
+                toastr.warning(message, 'Transfer Warning');
+            });
+
+            // Window event listeners
             window.addEventListener('resize', () => {
                 this.deviceType = detectDeviceType();
             });
 
-            // Handle page unload
             window.addEventListener('beforeunload', () => {
                 FileTransfer.cleanupConnections();
             });
 
-            // Set Toastr options
+            // Configure Toastr
             toastr.options = {
-                "closeButton": true,
-                "progressBar": true,
-                "positionClass": "toast-bottom-right",
-                "preventDuplicates": true,
-                "timeOut": "5000",
+                closeButton: true,
+                progressBar: true,
+                positionClass: "toast-bottom-right",
+                preventDuplicates: true,
+                timeOut: 5000,
+                extendedTimeOut: 2000,
+                newestOnTop: false,
+                className: 'file-transfer-toast'
             };
         },
 
         // UI interaction methods
-
-        // File selection handlers
         handleFileDrop(event) {
             event.preventDefault();
             this.isDragging = false;
@@ -151,7 +245,6 @@ function appData() {
             this.selectedFiles = Array.from(event.target.files);
         },
 
-        // Select peer and set up connection
         async selectPeer(peer) {
             this.selectedPeer = peer;
             this.showFileTransfer = true;
@@ -162,7 +255,7 @@ function appData() {
                     const pc = await FileTransfer.createPeerConnection(peer.id);
                     const channel = pc.createDataChannel('fileTransfer', {
                         ordered: true,
-                        maxRetransmits: null // Ensure reliable ordered delivery
+                        maxRetransmits: null
                     });
                     FileTransfer.setupDataChannel(channel, peer.id);
 
@@ -181,15 +274,42 @@ function appData() {
             }
         },
 
-        // Send files
         async sendFiles() {
             if (this.selectedFiles.length === 0 || !this.selectedPeer) return;
 
+            const totalSize = this.selectedFiles.reduce((acc, file) => acc + file.size, 0);
+            const MAX_RECOMMENDED_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+
+            if (totalSize > MAX_RECOMMENDED_SIZE) {
+                const confirmed = await new Promise(resolve => {
+                    toastr.options = {
+                        timeOut: 0,
+                        extendedTimeOut: 0,
+                        closeButton: true,
+                        closeHtml: `
+                            <button class="btn-primary mr-2">Continue</button>
+                            <button>Cancel</button>
+                        `,
+                        onCloseClick: () => resolve(false),
+                        onclick: () => resolve(true)
+                    };
+                    toastr.warning(
+                        'This is a large transfer and might take a while. Continue?',
+                        'Large Transfer'
+                    );
+                });
+
+                if (!confirmed) return;
+            }
+
+            this.proceedWithTransfer();
+        },
+
+        proceedWithTransfer() {
             FileTransfer.setSelectedFiles(this.selectedFiles);
             FileTransfer.setSelectedPeer(this.selectedPeer);
 
             const socket = FileTransfer.getSocket();
-            // Send file request via signaling server
             socket.emit('file-request', {
                 target: this.selectedPeer.id,
                 files: this.selectedFiles.map(file => ({
@@ -204,11 +324,8 @@ function appData() {
             this.showFileTransfer = false;
         },
 
-        // Accept or reject transfer
         acceptTransfer() {
             this.showIncomingRequest = false;
-
-            // Send acceptance to sender
             const socket = FileTransfer.getSocket();
             socket.emit('file-response', {
                 target: this.receivingDetails.peer.id,
@@ -218,31 +335,25 @@ function appData() {
             this.showProgress = true;
             this.transferStatus = 'Receiving Files...';
             this.transferProgress = 0;
-
             toastr.success('Accepted file transfer request.', 'Transfer Accepted');
         },
 
         rejectTransfer() {
             this.showIncomingRequest = false;
             this.isReceivingFile = false;
-
-            // Send rejection to sender
             const socket = FileTransfer.getSocket();
             socket.emit('file-response', {
                 target: this.receivingDetails.peer.id,
                 accepted: false
             });
-
             toastr.info('Rejected file transfer request.', 'Transfer Rejected');
         },
 
-        // Helper methods
         getPeerName(peerId) {
             const peer = this.peers.find(p => p.id === peerId);
             return peer ? peer.name : peerId;
         },
 
-        // File preview navigation
         getCurrentFile() {
             return this.receivedFiles[this.currentFileIndex] || {};
         },
@@ -252,16 +363,15 @@ function appData() {
                 this.currentFileIndex++;
             }
         },
+
         prevFile() {
             if (this.currentFileIndex > 0) {
                 this.currentFileIndex--;
             }
         },
 
-        // File download handling
         downloadFile(file) {
             if (!file || !file.url) return;
-
             const a = document.createElement('a');
             a.href = file.url;
             a.download = file.name;
@@ -275,26 +385,19 @@ function appData() {
 
             try {
                 const zip = new JSZip();
-
-                // Create a promise for each file to be added to the zip
                 const filePromises = this.receivedFiles.map(async (file) => {
-                    // Convert blob to array buffer to ensure binary data integrity
                     const arrayBuffer = await file.blob.arrayBuffer();
-
-                    // Add file to zip with binary flag
                     zip.file(file.name, arrayBuffer, {
                         binary: true,
                         compression: "DEFLATE",
                         compressionOptions: {
-                            level: 6 // Balanced compression level
+                            level: 6
                         }
                     });
                 });
 
-                // Wait for all files to be added to the zip
                 await Promise.all(filePromises);
 
-                // Generate the zip file with explicit options
                 const content = await zip.generateAsync({
                     type: 'blob',
                     compression: "DEFLATE",
@@ -306,7 +409,6 @@ function appData() {
                     platform: "UNIX"
                 });
 
-                // Create and trigger download
                 const url = URL.createObjectURL(content);
                 const a = document.createElement('a');
                 a.href = url;
@@ -314,20 +416,19 @@ function appData() {
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-
-                // Clean up
                 URL.revokeObjectURL(url);
 
             } catch (error) {
                 console.error('Error creating zip file:', error);
-                toastr.error('Failed to create zip file. Please try downloading files individually.', 'Download Error');
+                toastr.error(
+                    'Failed to create zip file. Please try downloading files individually.',
+                    'Download Error'
+                );
             }
         },
 
-        // Cleanup on unload
         cleanup() {
             FileTransfer.cleanupConnections();
         }
-
     };
 }
