@@ -34,6 +34,9 @@ const CHUNK_SIZE = 16 * 1024; // 16 KB
 const MAX_BUFFERED_AMOUNT = 4 * 1024 * 1024; // 4 MB
 const BUFFERED_AMOUNT_LOW_THRESHOLD = 1 * 1024 * 1024; // 1 MB
 
+const CHUNK_RETRY_ATTEMPTS = 3;
+const CHUNK_RETRY_DELAY = 1000; // 1 second
+
 // Main application data and logic
 function appData() {
     return {
@@ -551,11 +554,29 @@ function appData() {
                     case 'file-end':
                         this.finalizeFile(parsedMessage.name, parsedMessage.fileNumber, parsedMessage.totalFiles);
                         break;
+                    // Add the new case here
+                    case 'request-chunk':
+                        this.retransmitChunk(parsedMessage, peerId);
+                        break;
                     default:
                         console.log('Unknown message type:', parsedMessage.type);
                 }
             } catch (error) {
                 console.error('Error handling data channel message:', error);
+            }
+        },
+
+        async retransmitChunk(request, peerId) {
+            const { fileName, start, end } = request;
+            const file = this.selectedFiles.find(f => f.name === fileName);
+            
+            if (!file) return;
+            
+            const chunk = await file.slice(start, end).arrayBuffer();
+            const channel = this.dataChannels.get(peerId);
+            
+            if (channel) {
+                channel.send(chunk);
             }
         },
 
@@ -693,72 +714,156 @@ function appData() {
             }
         },
 
-        handleFileChunk(chunk, peerId) {
+        async handleFileChunk(chunk, peerId) {
             try {
-                // Check if we're in receiving state
-                if (!this.isReceivingFile) {
-                    console.warn('Received chunk but transfer not initialized');
+                if (!this.isReceivingFile || !this.currentReceivingFileName) {
+                    console.warn('Received chunk but transfer not properly initialized');
                     return;
                 }
-
-                // If no current file, try to find the next incomplete file
-                if (!this.currentReceivingFileName) {
-                    const nextFile = Array.from(this.fileChunks.entries())
-                        .find(([_, data]) => !data.isComplete);
-                    
-                    if (nextFile) {
-                        this.currentReceivingFileName = nextFile[0];
-                        console.log('Resuming transfer with file:', this.currentReceivingFileName);
-                    } else {
-                        console.warn('No incomplete files found for chunk');
-                        return;
-                    }
-                }
-
-                // Get current file data
+        
                 const fileData = this.fileChunks.get(this.currentReceivingFileName);
                 if (!fileData) {
                     console.error('No file data found for:', this.currentReceivingFileName);
                     return;
                 }
-
-                // Process chunk for current file
-                const currentFile = fileData;
+        
+                // Add chunk with position tracking
+                const chunkPosition = fileData.size;
+                fileData.chunks.push({
+                    data: chunk,
+                    position: chunkPosition
+                });
                 
-                // Verify we haven't exceeded expected size
-                const newSize = currentFile.size + chunk.byteLength;
-                if (newSize > currentFile.expectedSize) {
-                    console.warn(`Chunk would exceed expected file size for ${this.currentReceivingFileName}`);
-                    return;
-                }
-
-                // Add chunk and update size
-                currentFile.chunks.push(chunk);
-                currentFile.size = newSize;
-
-                console.log(`Received chunk: ${newSize}/${currentFile.expectedSize} bytes for file ${currentFile.metadata.name}`);
-
-                // Update progress
+                const newSize = fileData.size + chunk.byteLength;
+                fileData.size = newSize;
+        
+                // Log progress
+                console.log(`Received chunk: ${newSize}/${fileData.expectedSize} bytes for file ${fileData.metadata.name}`);
+        
+                // Update progress calculations
                 const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + newSize;
-                const totalSize = this.totalTransferSize;
-
-                // Calculate both individual and total progress
-                const fileProgress = Math.round((currentFile.size / currentFile.expectedSize) * 100);
-                this.transferProgress = Math.round((totalReceived / totalSize) * 100);
+                const fileProgress = Math.round((newSize / fileData.expectedSize) * 100);
+                this.transferProgress = Math.round((totalReceived / this.totalTransferSize) * 100);
                 
-                // Update status with both file and total progress
-                this.transferDetails = `File ${currentFile.metadata.name}: ${fileProgress}% (${formatFileSize(currentFile.size)} of ${formatFileSize(currentFile.expectedSize)})`;
+                // Update status
+                this.transferDetails = `${fileData.metadata.name}: ${fileProgress}% (${formatFileSize(newSize)} of ${formatFileSize(fileData.expectedSize)})`;
                 this.transferStatus = `Overall Progress: ${this.transferProgress}%`;
-
-                // Check if current file is complete
-                if (currentFile.size >= currentFile.expectedSize) {
-                    console.log(`File ${currentFile.metadata.name} received completely.`);
-                    this.finalizeFile(this.currentReceivingFileName);
+        
+                // Check for missing chunks when we're close to completion
+                if (newSize >= fileData.expectedSize * 0.98) { // Check when we're at 98% or more
+                    const missingChunks = this.findMissingChunks(fileData);
+                    
+                    if (missingChunks.length > 0) {
+                        console.log(`Found ${missingChunks.length} missing chunks. Requesting retransmission...`);
+                        await this.requestMissingChunks(missingChunks, peerId);
+                    }
                 }
-
+        
+                // Verify completion
+                if (newSize >= fileData.expectedSize) {
+                    await this.verifyAndFinalizeFile(this.currentReceivingFileName, peerId);
+                }
+        
             } catch (error) {
                 console.error('Error handling file chunk:', error);
                 toastr.error('Error processing file chunk', 'Transfer Error');
+            }
+        },
+
+        findMissingChunks(fileData) {
+            const chunks = fileData.chunks.sort((a, b) => a.position - b.position);
+            const missingChunks = [];
+            let expectedPosition = 0;
+        
+            for (const chunk of chunks) {
+                if (chunk.position > expectedPosition) {
+                    // Found a gap
+                    missingChunks.push({
+                        start: expectedPosition,
+                        end: chunk.position
+                    });
+                }
+                expectedPosition = chunk.position + chunk.data.byteLength;
+            }
+        
+            // Check if we're missing anything at the end
+            if (expectedPosition < fileData.expectedSize) {
+                missingChunks.push({
+                    start: expectedPosition,
+                    end: fileData.expectedSize
+                });
+            }
+        
+            return missingChunks;
+        },
+
+        async requestMissingChunks(missingChunks, peerId) {
+            const channel = this.dataChannels.get(peerId);
+            if (!channel) return;
+        
+            for (const chunk of missingChunks) {
+                for (let attempt = 0; attempt < CHUNK_RETRY_ATTEMPTS; attempt++) {
+                    try {
+                        channel.send(JSON.stringify({
+                            type: 'request-chunk',
+                            fileName: this.currentReceivingFileName,
+                            start: chunk.start,
+                            end: chunk.end
+                        }));
+        
+                        // Wait for chunk or timeout
+                        await Promise.race([
+                            new Promise(resolve => setTimeout(resolve, CHUNK_RETRY_DELAY)),
+                            new Promise(resolve => {
+                                const checkChunk = setInterval(() => {
+                                    const fileData = this.fileChunks.get(this.currentReceivingFileName);
+                                    if (fileData.chunks.some(c => c.position >= chunk.start && c.position < chunk.end)) {
+                                        clearInterval(checkChunk);
+                                        resolve();
+                                    }
+                                }, 100);
+                            })
+                        ]);
+        
+                        break; // Success, move to next chunk
+                    } catch (error) {
+                        console.error(`Failed to receive chunk after attempt ${attempt + 1}`);
+                        if (attempt === CHUNK_RETRY_ATTEMPTS - 1) {
+                            throw new Error('Failed to receive missing chunks after all attempts');
+                        }
+                    }
+                }
+            }
+        },
+
+        async verifyAndFinalizeFile(fileName, peerId) {
+            const fileData = this.fileChunks.get(fileName);
+            if (!fileData || fileData.isComplete) return;
+        
+            // Sort chunks by position
+            const sortedChunks = fileData.chunks
+                .sort((a, b) => a.position - b.position)
+                .map(chunk => chunk.data);
+        
+            // Verify total size
+            const totalSize = sortedChunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
+            
+            if (totalSize === fileData.expectedSize) {
+                // Create blob and finalize
+                const blob = new Blob(sortedChunks, { 
+                    type: fileData.metadata.type || 'application/octet-stream'
+                });
+        
+                if (blob.size === fileData.expectedSize) {
+                    // Proceed with existing finalization logic
+                    await this.finalizeFile(fileName);
+                } else {
+                    console.error(`Blob size mismatch: ${blob.size} vs expected ${fileData.expectedSize}`);
+                    throw new Error('Blob size mismatch');
+                }
+            } else {
+                console.error(`Size mismatch: ${totalSize} vs expected ${fileData.expectedSize}`);
+                throw new Error('Total size mismatch');
             }
         },
 
