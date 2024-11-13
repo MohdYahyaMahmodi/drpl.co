@@ -4,7 +4,7 @@ const nouns = ['Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger', 'Falcon', 
 
 // Constants for file transfer
 const CHUNK_SIZE = 16 * 1024; // 16 KB chunks for better handling
-const MAX_BUFFER_SIZE = 1024 * 1024; // 1 MB buffer threshold
+const MAX_BUFFER_SIZE = 8 * 1024 * 1024; // 8 MB buffer threshold
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second delay between retries
 
