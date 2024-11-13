@@ -126,18 +126,30 @@ function isPrivateIP(ip) {
   );
 }
 
+// Helper function to notify subnet peers about disconnection
+function notifySubnetPeersOfDisconnection(peerId, subnet) {
+  const subnetSockets = Array.from(peers.values())
+    .filter(p => p.subnet === subnet)
+    .map(p => p.socket);
+
+  subnetSockets.forEach(socketId => {
+    io.to(socketId).emit('peer-disconnected', peerId);
+  });
+}
+
 // Clean up stale connections
 function cleanupStaleConnections() {
   const now = Date.now();
   for (const [peerId, peer] of peers.entries()) {
     if (now - peer.lastHeartbeat > HEARTBEAT_TIMEOUT) {
       console.log(`Removing stale peer: ${peer.name} (${peerId})`);
+      const subnet = peer.subnet;
       peers.delete(peerId);
-      io.emit('peer-disconnected', peerId);
-
-      // Broadcast update to the peer's subnet
-      if (peer.subnet) {
-        broadcastPeersToSubnet(peer.subnet);
+      
+      // Only notify peers on the same subnet
+      if (subnet) {
+        notifySubnetPeersOfDisconnection(peerId, subnet);
+        broadcastPeersToSubnet(subnet);
       }
     }
   }
@@ -264,14 +276,19 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     clearInterval(heartbeatInterval);
     
-    // Remove all peers associated with this socket
+    // Remove all peers associated with this socket and notify only their subnets
     const peersToRemove = Array.from(peers.entries())
       .filter(([_, peer]) => peer.socket === socket.id);
 
     for (const [peerId, peer] of peersToRemove) {
+      const subnet = peer.subnet;
       peers.delete(peerId);
       console.log(`Client disconnected: ${peer.name} (${peerId})`);
-      io.emit('peer-disconnected', peerId);
+      
+      // Only notify peers on the same subnet
+      if (subnet) {
+        notifySubnetPeersOfDisconnection(peerId, subnet);
+      }
     }
 
     // Broadcast updates to affected subnets
