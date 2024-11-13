@@ -9,6 +9,10 @@ const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 const os = require('os');
 
+// Constants for heartbeat
+const HEARTBEAT_INTERVAL = 15000; // 15 seconds
+const HEARTBEAT_TIMEOUT = 45000;  // 45 seconds
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
@@ -57,8 +61,8 @@ app.use(helmet({
         'ws://localhost:*',
         'ws://127.0.0.1:*',
         'wss://drpl.co',
-        'ws://*:*',  // Allow WebSocket connections from local network
-        'wss://*:*'  // Allow secure WebSocket connections
+        'ws://*:*',
+        'wss://*:*'
       ],
       fontSrc: [
         "'self'", 
@@ -98,14 +102,10 @@ const peers = new Map();
 
 // Helper function to get client's real IP
 function getClientIP(socket) {
-  // Check X-Forwarded-For header first (for proxy situations)
   const forwardedFor = socket.handshake.headers['x-forwarded-for'];
   if (forwardedFor) {
-    // Get the first IP in the list (client's original IP)
     return forwardedFor.split(',')[0].trim();
   }
-  
-  // Fall back to direct connection IP
   return socket.handshake.address.replace('::ffff:', '');
 }
 
@@ -122,8 +122,44 @@ function isPrivateIP(ip) {
     (parts[0] === 10) ||
     (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
     (parts[0] === 192 && parts[1] === 168) ||
-    (parts[0] === 169 && parts[1] === 254) // Link-local addresses
+    (parts[0] === 169 && parts[1] === 254)
   );
+}
+
+// Clean up stale connections
+function cleanupStaleConnections() {
+  const now = Date.now();
+  for (const [peerId, peer] of peers.entries()) {
+    if (now - peer.lastHeartbeat > HEARTBEAT_TIMEOUT) {
+      console.log(`Removing stale peer: ${peer.name} (${peerId})`);
+      peers.delete(peerId);
+      io.emit('peer-disconnected', peerId);
+
+      // Broadcast update to the peer's subnet
+      if (peer.subnet) {
+        broadcastPeersToSubnet(peer.subnet);
+      }
+    }
+  }
+}
+
+// Broadcast peers only to clients on the same subnet
+function broadcastPeersToSubnet(subnet) {
+  const subnetPeers = Array.from(peers.values())
+    .filter(peer => peer.subnet === subnet)
+    .map(peer => ({
+      id: peer.id,
+      name: peer.name,
+      type: peer.type
+    }));
+
+  const subnetSockets = Array.from(peers.values())
+    .filter(peer => peer.subnet === subnet)
+    .map(peer => peer.socket);
+
+  subnetSockets.forEach(socketId => {
+    io.to(socketId).emit('peers', subnetPeers);
+  });
 }
 
 // Socket.IO connection handling
@@ -132,8 +168,29 @@ io.on('connection', (socket) => {
   const clientIP = getClientIP(socket);
   const clientSubnet = getSubnet(clientIP);
 
+  // Set up heartbeat for this connection
+  const heartbeatInterval = setInterval(() => {
+    socket.emit('heartbeat');
+  }, HEARTBEAT_INTERVAL);
+
+  // Handle heartbeat response
+  socket.on('heartbeat-response', () => {
+    for (const [_, peer] of peers.entries()) {
+      if (peer.socket === socket.id) {
+        peer.lastHeartbeat = Date.now();
+      }
+    }
+  });
+
   // Register new peer
   socket.on('register', (data) => {
+    // Clean up any existing peers with this socket ID
+    for (const [peerId, peer] of peers.entries()) {
+      if (peer.socket === socket.id) {
+        peers.delete(peerId);
+      }
+    }
+
     const deviceName = validator.escape(data.deviceName || 'Unknown Device');
     const deviceType = validator.escape(data.deviceType || 'unknown');
 
@@ -145,7 +202,8 @@ io.on('connection', (socket) => {
       type: deviceType,
       ip: clientIP,
       subnet: clientSubnet,
-      isPrivate: isPrivateIP(clientIP)
+      isPrivate: isPrivateIP(clientIP),
+      lastHeartbeat: Date.now()
     });
 
     socket.emit('registered', { peerId });
@@ -204,41 +262,28 @@ io.on('connection', (socket) => {
 
   // Handle disconnection
   socket.on('disconnect', () => {
-    const peerId = Array.from(peers.entries())
-      .find(([_, peer]) => peer.socket === socket.id)?.[0];
+    clearInterval(heartbeatInterval);
+    
+    // Remove all peers associated with this socket
+    const peersToRemove = Array.from(peers.entries())
+      .filter(([_, peer]) => peer.socket === socket.id);
 
-    if (peerId) {
-      const peer = peers.get(peerId);
+    for (const [peerId, peer] of peersToRemove) {
       peers.delete(peerId);
-      if (peer) {
-        broadcastPeersToSubnet(peer.subnet);
-      }
+      console.log(`Client disconnected: ${peer.name} (${peerId})`);
+      io.emit('peer-disconnected', peerId);
     }
-    console.log('Client disconnected:', socket.id);
+
+    // Broadcast updates to affected subnets
+    const affectedSubnets = new Set(peersToRemove.map(([_, peer]) => peer.subnet));
+    affectedSubnets.forEach(subnet => {
+      broadcastPeersToSubnet(subnet);
+    });
   });
 });
 
-// Broadcast peers only to clients on the same subnet
-function broadcastPeersToSubnet(subnet) {
-  // Get all peers on this subnet
-  const subnetPeers = Array.from(peers.values())
-    .filter(peer => peer.subnet === subnet)
-    .map(peer => ({
-      id: peer.id,
-      name: peer.name,
-      type: peer.type
-    }));
-
-  // Find all socket IDs for peers on this subnet
-  const subnetSockets = Array.from(peers.values())
-    .filter(peer => peer.subnet === subnet)
-    .map(peer => peer.socket);
-
-  // Broadcast peer list only to sockets on this subnet
-  subnetSockets.forEach(socketId => {
-    io.to(socketId).emit('peers', subnetPeers);
-  });
-}
+// Start cleanup interval
+setInterval(cleanupStaleConnections, HEARTBEAT_INTERVAL);
 
 // Routes
 app.get('/', (req, res) => {

@@ -88,6 +88,16 @@ function appData() {
                 "preventDuplicates": true,
                 "timeOut": "5000",
             };
+
+            // Add heartbeat response handler
+            this.socket.on('heartbeat', () => {
+                this.socket.emit('heartbeat-response');
+            });
+
+            // Add handler for peer disconnection
+            this.socket.on('peer-disconnected', (peerId) => {
+                this.peers = this.peers.filter(p => p.id !== peerId);
+            });
         },
 
         // WebSocket setup and management
