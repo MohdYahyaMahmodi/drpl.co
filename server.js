@@ -9,6 +9,10 @@ const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 
 const app = express();
+
+// Configure Express to trust the proxy
+app.set('trust proxy', true);
+
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
@@ -36,33 +40,33 @@ app.use(helmet({
         'https://cdnjs.cloudflare.com', 
         'https://cdn.tailwindcss.com', 
         'https://cdn.jsdelivr.net',
-        'https://drop.co' // Allow scripts from your domain
+        'https://drpl.co' // Allow scripts from your domain
       ],
       styleSrc: [
         "'self'", 
         "'unsafe-inline'", 
         'https://cdnjs.cloudflare.com', 
         'https://cdn.jsdelivr.net',
-        'https://drop.co' // Allow styles from your domain
+        'https://drpl.co' // Allow styles from your domain
       ],
       imgSrc: [
         "'self'", 
         'data:', 
         'blob:',
-        'https://drop.co' // Allow images from your domain
+        'https://drpl.co' // Allow images from your domain
       ],
       connectSrc: [
         "'self'",
         'ws://localhost:*',
         'ws://127.0.0.1:*',
         'ws://192.168.12.163:*', // Your local IP with ws protocol
-        'wss://drop.co' // Allow WebSocket connections from your domain
+        'wss://drpl.co' // Allow WebSocket connections from your domain
       ],
       fontSrc: [
         "'self'", 
         'https://cdnjs.cloudflare.com', 
         'https://cdn.jsdelivr.net',
-        'https://drop.co' // Allow fonts from your domain
+        'https://drpl.co' // Allow fonts from your domain
       ],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"]
@@ -80,7 +84,7 @@ app.use(cors({
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'http://192.168.12.163:3000', // Your local IP address
-      'https://drop.co' // Added production domain
+      'https://drpl.co' // Added production domain
     ];
 
     if (allowedOrigins.indexOf(origin) === -1) {
@@ -98,7 +102,13 @@ const peers = new Map();
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  // Get the client's IP address
+  let clientIp = socket.handshake.headers['x-forwarded-for'] || socket.conn.remoteAddress;
+  if (clientIp.includes(',')) {
+    // In case of multiple IP addresses, take the first one
+    clientIp = clientIp.split(',')[0].trim();
+  }
+  console.log('New client connected:', socket.id, 'IP:', clientIp);
 
   // Register new peer
   socket.on('register', (data) => {
@@ -111,7 +121,8 @@ io.on('connection', (socket) => {
       id: peerId,
       socket: socket.id,
       name: deviceName,
-      type: deviceType
+      type: deviceType,
+      ip: clientIp // Store IP address
     });
 
     socket.emit('registered', { peerId });
@@ -120,11 +131,16 @@ io.on('connection', (socket) => {
 
   // Handle peer discovery request
   socket.on('discover', () => {
-    const peerList = Array.from(peers.values()).map(peer => ({
-      id: peer.id,
-      name: peer.name,
-      type: peer.type
-    }));
+    const requestingPeer = Array.from(peers.values()).find(p => p.socket === socket.id);
+    if (!requestingPeer) return;
+
+    const peerList = Array.from(peers.values())
+      .filter(peer => peer.ip === requestingPeer.ip && peer.id !== requestingPeer.id)
+      .map(peer => ({
+        id: peer.id,
+        name: peer.name,
+        type: peer.type
+      }));
     socket.emit('peers', peerList);
   });
 
@@ -180,6 +196,7 @@ io.on('connection', (socket) => {
       .find(([_, peer]) => peer.socket === socket.id)?.[0];
 
     if (peerId) {
+      const disconnectedPeer = peers.get(peerId);
       peers.delete(peerId);
       broadcastPeers();
     }
@@ -189,12 +206,19 @@ io.on('connection', (socket) => {
 
 // Broadcast updated peer list to all connected clients
 function broadcastPeers() {
-  const peerList = Array.from(peers.values()).map(peer => ({
-    id: peer.id,
-    name: peer.name,
-    type: peer.type
-  }));
-  io.emit('peers', peerList);
+  peers.forEach((peer) => {
+    const peerSocket = io.sockets.sockets.get(peer.socket);
+    if (peerSocket) {
+      const peerList = Array.from(peers.values())
+        .filter(p => p.ip === peer.ip && p.id !== peer.id)
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          type: p.type
+        }));
+      peerSocket.emit('peers', peerList);
+    }
+  });
 }
 
 // Routes
