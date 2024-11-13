@@ -1,5 +1,9 @@
 // app.js
 
+// Word lists for generating device names (not used in this version but kept for reference)
+const adjectivesList = ['Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver', 'Crystal', 'Cosmic', 'Electric', 'Mystic'];
+const nounsList = ['Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger', 'Falcon', 'Panther', 'Hawk', 'Bear'];
+
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -50,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Modal close buttons
+    // Info Modal
     document.getElementById('info-modal-close').addEventListener('click', function() {
         document.getElementById('info-modal').style.display = 'none';
     });
@@ -57,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('info-modal').style.display = 'none';
     });
 
+    // Author Modal
     document.getElementById('author-modal-close').addEventListener('click', function() {
         document.getElementById('author-modal').style.display = 'none';
     });
@@ -146,7 +152,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('send-files-button').disabled = true;
         document.getElementById('selected-files-container').style.display = 'none';
         document.getElementById('selected-files-list').innerHTML = '';
-        document.getElementById('waiting-confirmation').style.display = 'none';
     }
 
     // File Transfer Modal Events
@@ -248,44 +253,60 @@ document.addEventListener('DOMContentLoaded', function() {
     function sendFiles() {
         if (selectedFiles.length === 0) return;
 
-        // Disable send button and show waiting message
-        document.getElementById('send-files-button').style.display = 'none';
-        document.getElementById('file-transfer-cancel-button').style.display = 'none';
-        document.getElementById('selected-files-container').style.display = 'none';
-        document.getElementById('file-drop-area').style.display = 'none';
-        document.getElementById('waiting-confirmation').style.display = 'block';
+        document.getElementById('file-transfer-modal').style.display = 'none';
+        // Show "Waiting for confirmation" modal
+        transferStatus = 'Waiting for confirmation from receiving device...';
+        transferDetails = '';
+        transferProgress = 0;
+        showProgressModal();
+        updateProgressModal();
 
         peersManager.sendFiles(selectedPeer.id, selectedFiles);
     }
 
+    // Modify showProgressModal and updateProgressModal
     function showProgressModal() {
         document.getElementById('progress-modal').style.display = 'flex';
-        updateProgressModal();
+        document.getElementById('progress-bar-container').style.display = 'none'; // Hide progress bar initially
+        document.getElementById('progress-icon').className = 'fas fa-spinner fa-spin text-4xl text-[#333533] mb-4';
     }
 
     function updateProgressModal() {
         document.getElementById('transfer-status').textContent = transferStatus;
         document.getElementById('transfer-details').textContent = transferDetails;
-        document.getElementById('progress-bar').style.width = transferProgress + '%';
+
+        if (transferProgress > 0) {
+            document.getElementById('progress-bar-container').style.display = 'block';
+            document.getElementById('progress-bar').style.width = transferProgress + '%';
+        } else {
+            document.getElementById('progress-bar-container').style.display = 'none';
+        }
     }
 
     function hideProgressModal() {
         document.getElementById('progress-modal').style.display = 'none';
     }
 
-    function handleIncomingTransfer(peerId, fileDetails) {
+    // Handle incoming file offers
+    window.addEventListener('incoming-file-offer', function(e) {
+        const data = e.detail;
+        handleIncomingFileOffer(data.peerId, data.fileInfo, data.senderName);
+    });
+
+    function handleIncomingFileOffer(peerId, fileInfo, senderName) {
         isReceivingFile = true;
         receivingDetails = {
             peer: peers[peerId],
-            fileCount: fileDetails.fileCount,
-            totalSize: fileDetails.totalSize
+            fileCount: fileInfo.fileCount,
+            totalSize: fileInfo.totalSize,
+            senderName: senderName || peers[peerId].name.displayName
         };
         showIncomingRequestModal();
     }
 
     function showIncomingRequestModal() {
         document.getElementById('incoming-request-modal').style.display = 'flex';
-        document.getElementById('incoming-peer-name').textContent = receivingDetails.peer.name.displayName;
+        document.getElementById('incoming-peer-id').textContent = receivingDetails.senderName;
         document.getElementById('incoming-file-count').textContent = receivingDetails.fileCount;
         document.getElementById('incoming-total-size').textContent = formatFileSize(receivingDetails.totalSize);
     }
@@ -304,21 +325,74 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function acceptTransfer() {
         document.getElementById('incoming-request-modal').style.display = 'none';
-        showProgressModal();
-        transferStatus = 'Transferring...';
-        transferProgress = 0;
-        updateProgressModal();
-
-        // Inform the sender that the transfer is accepted
+        // Send 'file-accept' message to the sender
         peersManager.acceptTransfer(receivingDetails.peer.id);
+        // Show "Transferring" modal
+        transferStatus = 'Transferring...';
+        transferDetails = '';
+        transferProgress = 0;
+        showProgressModal();
+        updateProgressModal();
     }
 
     function rejectTransfer() {
         document.getElementById('incoming-request-modal').style.display = 'none';
-        isReceivingFile = false;
         // Inform the sender that the transfer was rejected
         peersManager.rejectTransfer(receivingDetails.peer.id);
     }
+
+    // Handle transfer declined
+    window.addEventListener('transfer-declined', function(e) {
+        const data = e.detail;
+        handleTransferDeclined(data.peerId);
+    });
+
+    function handleTransferDeclined(peerId) {
+        // Hide progress modal
+        hideProgressModal();
+        // Show alert or notification
+        alert('Transfer was declined by the receiving device.');
+    }
+
+    // Handle transfer accepted
+    window.addEventListener('transfer-accepted', function(e) {
+        const data = e.detail;
+        handleTransferAccepted(data.peerId);
+    });
+
+    function handleTransferAccepted(peerId) {
+        // Start transferring files
+        transferStatus = 'Transferring...';
+        transferDetails = '';
+        transferProgress = 0;
+        updateProgressModal();
+        peersManager.startFileTransfer(peerId);
+    }
+
+    // Handle file transfer progress events
+    window.addEventListener('file-progress', function(e) {
+        const data = e.detail;
+        transferProgress = Math.round(data.progress * 100);
+        transferDetails = `${transferProgress}% complete`;
+        updateProgressModal();
+        if (transferProgress >= 100) {
+            transferStatus = 'Transfer Complete!';
+            transferDetails = '';
+            document.getElementById('progress-icon').className = 'fas fa-check-circle text-4xl text-green-500 mb-4';
+            updateProgressModal();
+            setTimeout(() => {
+                hideProgressModal();
+                if (isReceivingFile) {
+                    showFilePreviewModal();
+                }
+            }, 2000);
+        }
+    });
+
+    window.addEventListener('file-received', function(e) {
+        const file = e.detail;
+        receivedFiles.push(file);
+    });
 
     function isImageFile(file) {
         return file?.type?.startsWith('image/');
@@ -340,11 +414,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFilePreview() {
         const file = getCurrentFile();
         const filePreviewContainer = document.getElementById('file-preview-container');
+        const currentFileName = document.getElementById('current-file-name');
+        const currentFileSize = document.getElementById('current-file-size');
         const prevFileButton = document.getElementById('prev-file-button');
         const nextFileButton = document.getElementById('next-file-button');
         const filePagination = document.getElementById('file-pagination');
 
         filePreviewContainer.innerHTML = '';
+        currentFileName.textContent = file.name;
+        currentFileSize.textContent = formatFileSize(file.size);
 
         if (isImageFile(file)) {
             const img = document.createElement('img');
@@ -357,7 +435,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const icon = document.createElement('i');
             icon.className = getFileIcon(file);
             icon.classList.add('text-6xl', 'text-[#333533]', 'mb-4');
+            const nameP = document.createElement('p');
+            nameP.className = 'text-[#333533]';
+            nameP.textContent = file.name;
+            const typeP = document.createElement('p');
+            typeP.className = 'text-sm text-gray-500';
+            typeP.textContent = file.type;
             div.appendChild(icon);
+            div.appendChild(nameP);
+            div.appendChild(typeP);
             filePreviewContainer.appendChild(div);
         }
 
@@ -415,6 +501,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    document.getElementById('download-file-button').addEventListener('click', function() {
+        downloadFile(getCurrentFile());
+    });
+
+    function downloadFile(file) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(file.blob);
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
     // Event handlers for PeersManager events
     window.addEventListener('peers', function(e) {
         const peerList = e.detail;
@@ -447,40 +546,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePeerList();
     });
 
-    // Handle file transfer progress events
-    window.addEventListener('file-progress', function(e) {
-        const data = e.detail;
-        transferProgress = Math.round(data.progress * 100);
-        transferDetails = `${transferProgress}% complete`;
-        updateProgressModal();
-        if (transferProgress >= 100) {
-            transferStatus = isReceivingFile ? 'Transfer Complete!' : 'Transfer Complete!';
-            transferDetails = 'All files have been transferred successfully';
-            updateProgressModal();
-            setTimeout(() => {
-                hideProgressModal();
-                if (isReceivingFile) {
-                    showFilePreviewModal();
-                }
-            }, 2000);
-        }
-    });
-
-    window.addEventListener('file-received', function(e) {
-        const file = e.detail;
-        receivedFiles.push(file);
-    });
-
-    window.addEventListener('incoming-transfer-request', function(e) {
-        const data = e.detail;
-        handleIncomingTransfer(data.peerId, data.fileDetails);
-    });
-
-    window.addEventListener('transfer-declined', function(e) {
-        document.getElementById('file-transfer-modal').style.display = 'none';
-        alert('Transfer was declined by the receiving device.');
-    });
-
     // Additional classes and logic for ServerConnection, PeersManager, and RTCPeer
 
     class ServerConnection {
@@ -488,8 +553,6 @@ document.addEventListener('DOMContentLoaded', function() {
             this.id = null;
             this.socket = null;
             this.deviceType = deviceType;
-            this.displayName = '';
-            this.deviceName = '';
             this.connect();
         }
 
@@ -554,14 +617,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'signal':
                     window.dispatchEvent(new CustomEvent('signal', { detail: message }));
                     break;
-                case 'transfer-request':
-                    window.dispatchEvent(new CustomEvent('transfer-request', { detail: message }));
+                case 'file-offer':
+                    window.dispatchEvent(new CustomEvent('file-offer', { detail: message }));
                     break;
-                case 'transfer-accept':
-                    window.dispatchEvent(new CustomEvent('transfer-accept', { detail: message }));
+                case 'file-accept':
+                    window.dispatchEvent(new CustomEvent('file-accept', { detail: message }));
                     break;
-                case 'transfer-decline':
-                    window.dispatchEvent(new CustomEvent('transfer-decline', { detail: message }));
+                case 'file-decline':
+                    window.dispatchEvent(new CustomEvent('file-decline', { detail: message }));
                     break;
                 case 'ping':
                     this.send({ type: 'pong' });
@@ -577,14 +640,13 @@ document.addEventListener('DOMContentLoaded', function() {
         constructor(serverConnection) {
             this.serverConnection = serverConnection;
             this.peers = {};
-            this.filesToSend = {};
-            this.peerIdToSend = null;
+            this.filesToSend = null;
 
             window.addEventListener('signal', (e) => this.handleSignal(e.detail));
             window.addEventListener('peer-left', (e) => this.handlePeerLeft(e.detail));
-            window.addEventListener('transfer-request', (e) => this.handleTransferRequest(e.detail));
-            window.addEventListener('transfer-accept', (e) => this.handleTransferAccept(e.detail));
-            window.addEventListener('transfer-decline', (e) => this.handleTransferDecline(e.detail));
+            window.addEventListener('file-offer', (e) => this.handleFileOffer(e.detail));
+            window.addEventListener('file-accept', (e) => this.handleFileAccept(e.detail));
+            window.addEventListener('file-decline', (e) => this.handleFileDecline(e.detail));
         }
 
         handleSignal(message) {
@@ -613,61 +675,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         sendFiles(peerId, files) {
-            // Store the files to be sent
-            this.filesToSend[peerId] = files;
-            this.peerIdToSend = peerId;
-
-            // Send a transfer request via the server
+            const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+            const fileInfo = {
+                fileCount: files.length,
+                totalSize: totalSize
+            };
+            // Save files to send later
+            this.filesToSend = { peerId: peerId, files: files };
+            // Send file-offer message
             this.serverConnection.send({
-                type: 'transfer-request',
+                type: 'file-offer',
                 to: peerId,
-                fileDetails: {
-                    fileCount: files.length,
-                    totalSize: files.reduce((acc, file) => acc + file.size, 0)
-                },
-                senderName: this.serverConnection.displayName
+                senderName: this.serverConnection.displayName,
+                fileInfo: fileInfo
             });
         }
 
         acceptTransfer(peerId) {
-            // Send 'transfer-accept' message via server
             this.serverConnection.send({
-                type: 'transfer-accept',
+                type: 'file-accept',
                 to: peerId
             });
-
-            // Proceed to create RTCPeer and get ready to receive files
-            const peer = this.getOrCreatePeer(peerId, false); // Not initiator
-            peer.setupDataChannel();
         }
 
         rejectTransfer(peerId) {
-            // Send 'transfer-decline' message via server
             this.serverConnection.send({
-                type: 'transfer-decline',
+                type: 'file-decline',
                 to: peerId
             });
         }
 
-        handleTransferRequest(message) {
+        handleFileOffer(message) {
             const fromPeerId = message.sender;
-            const fileDetails = message.fileDetails;
-            const senderName = peers[fromPeerId]?.name?.displayName || 'Unknown';
-
-            // Dispatch an event to handle incoming transfer request
-            window.dispatchEvent(new CustomEvent('incoming-transfer-request', { detail: { peerId: fromPeerId, fileDetails, senderName } }));
+            const peer = this.getOrCreatePeer(fromPeerId, false); // Not initiator
+            peer.handleFileOffer(message);
         }
 
-        handleTransferAccept(message) {
+        handleFileAccept(message) {
             const fromPeerId = message.sender;
             const peer = this.getOrCreatePeer(fromPeerId, true); // Initiator
-            peer.sendFiles(this.filesToSend[fromPeerId]);
+            peer.handleFileAccept(message);
         }
 
-        handleTransferDecline(message) {
+        handleFileDecline(message) {
             const fromPeerId = message.sender;
-            // Notify the sending device that the transfer was declined
-            window.dispatchEvent(new CustomEvent('transfer-declined', { detail: { peerId: fromPeerId } }));
+            const peer = this.peers[fromPeerId];
+            if (peer) {
+                peer.handleFileDecline();
+            }
+        }
+
+        startFileTransfer(peerId) {
+            const peer = this.getOrCreatePeer(peerId, true); // Initiator
+            const files = this.filesToSend.files;
+            peer.sendFiles(files);
         }
     }
 
@@ -701,35 +762,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
 
             if (this.isInitiator) {
-                // Do not create data channel until transfer is accepted
-            }
-        }
-
-        setupDataChannel() {
-            if (this.isInitiator) {
-                this.channel = this.pc.createDataChannel('fileTransfer');
-                this.channel.onopen = () => {
-                    console.log('Data channel opened with', this.peerId);
-                    if (this.fileSender) {
-                        this.fileSender.sendNextFile();
-                    }
-                };
-            }
-
-            this.channel.onmessage = (event) => {
-                this.handleMessage(event.data);
-            };
-
-            this.channel.onerror = (error) => {
-                console.error('Data channel error:', error);
-            };
-
-            this.channel.onclose = () => {
-                console.log('Data channel closed with', this.peerId);
-            };
-
-            if (this.isInitiator) {
-                this.createOffer();
+                // Do not create data channel here; wait for acceptance
             }
         }
 
@@ -765,6 +798,27 @@ document.addEventListener('DOMContentLoaded', function() {
             this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
         }
 
+        setupDataChannel() {
+            this.channel.onopen = () => {
+                console.log('Data channel opened with', this.peerId);
+                if (this.fileSender && this.fileSender.hasFiles()) {
+                    this.fileSender.sendNextFile();
+                }
+            };
+
+            this.channel.onmessage = (event) => {
+                this.handleMessage(event.data);
+            };
+
+            this.channel.onerror = (error) => {
+                console.error('Data channel error:', error);
+            };
+
+            this.channel.onclose = () => {
+                console.log('Data channel closed with', this.peerId);
+            };
+        }
+
         handleMessage(message) {
             if (typeof message === 'string') {
                 const data = JSON.parse(message);
@@ -797,6 +851,40 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        handleFileOffer(message) {
+            const fileInfo = message.fileInfo;
+            const senderName = message.senderName;
+            // Notify UI to show accept/decline modal
+            window.dispatchEvent(new CustomEvent('incoming-file-offer', { detail: { peerId: this.peerId, fileInfo: fileInfo, senderName: senderName } }));
+        }
+
+        handleFileAccept(message) {
+            // Start the RTCPeerConnection and begin sending files
+            this.startConnection();
+            // Notify UI that transfer is accepted
+            window.dispatchEvent(new CustomEvent('transfer-accepted', { detail: { peerId: this.peerId } }));
+        }
+
+        handleFileDecline() {
+            // Notify UI that transfer was declined
+            window.dispatchEvent(new CustomEvent('transfer-declined', { detail: { peerId: this.peerId } }));
+        }
+
+        startConnection() {
+            if (this.isInitiator) {
+                if (!this.channel) {
+                    this.channel = this.pc.createDataChannel('fileTransfer');
+                    this.setupDataChannel();
+                }
+                this.createOffer();
+            }
+        }
+
+        acceptTransfer() {
+            // Logic to accept transfer
+            this.startConnection();
+        }
+
         close() {
             if (this.channel) {
                 this.channel.close();
@@ -815,10 +903,12 @@ document.addEventListener('DOMContentLoaded', function() {
             this.chunkSize = 16 * 1024; // 16 KB
         }
 
+        hasFiles() {
+            return this.fileIndex < this.files.length;
+        }
+
         sendNextFile() {
             if (this.fileIndex >= this.files.length) {
-                // All files sent
-                window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: 1 } }));
                 return;
             }
             const file = this.files[this.fileIndex];
@@ -839,10 +929,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.channel.send(event.target.result);
                 offset += event.target.result.byteLength;
 
-                const totalSize = this.files.reduce((acc, f) => acc + f.size, 0);
-                const sentSize = this.files.slice(0, this.fileIndex).reduce((acc, f) => acc + f.size, 0) + offset;
-                const progress = sentSize / totalSize;
-
+                const progress = offset / file.size;
                 window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: progress } }));
 
                 if (offset < file.size) {
