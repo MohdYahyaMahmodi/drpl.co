@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- ... (same as before) ... -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileDrop</title>
@@ -177,6 +178,11 @@
                     </div>
                 </div>
 
+                <!-- Waiting for Confirmation Message -->
+                <div id="waiting-confirmation" class="text-center text-[#333533] py-4" style="display: none;">
+                    <p>Waiting for confirmation from receiving device...</p>
+                </div>
+
                 <div class="flex justify-end space-x-4 mt-6">
                     <button 
                         id="file-transfer-cancel-button"
@@ -198,7 +204,7 @@
         <div class="absolute inset-0 bg-black bg-opacity-50"></div>
         
         <!-- Modal Content -->
-        <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
+        <div class="relative bg-white rounded-lg max-w-sm w-full p-6">
             <div class="text-center">
                 <i id="progress-icon" class="fas fa-spinner fa-spin text-4xl text-[#333533] mb-4"></i>
                 <h2 id="transfer-status" class="text-xl font-semibold text-[#242423] mb-2"></h2>
@@ -221,7 +227,7 @@
                 <i class="fas fa-file-import text-4xl text-[#333533]"></i>
                 <h2 class="text-xl font-semibold text-[#242423]">Incoming Files</h2>
                 <p class="text-[#333533]">
-                    <span id="incoming-peer-id"></span> wants to share files with you
+                    <span id="incoming-peer-name"></span> wants to send you files
                 </p>
                 <p class="text-sm text-gray-500">
                     <span id="incoming-file-count"></span> files • 
@@ -278,20 +284,6 @@
                 <!-- File Preview Container -->
                 <div id="file-preview-container" class="aspect-video bg-gray-100 rounded-lg flex items-center justify-center mb-4">
                     <!-- Content will be injected here -->
-                </div>
-
-                <!-- File Info & Controls -->
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p id="current-file-name" class="font-semibold text-[#242423]"></p>
-                        <p id="current-file-size" class="text-sm text-gray-500"></p>
-                    </div>
-                    <button 
-                        id="download-file-button"
-                        class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] transition-colors">
-                        <i class="fas fa-download mr-2"></i>
-                        Download
-                    </button>
                 </div>
 
                 <!-- File Pagination -->

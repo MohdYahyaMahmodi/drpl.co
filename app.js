@@ -1,17 +1,5 @@
 // app.js
 
-// Word lists for generating device names (not used in this version but kept for reference)
-const adjectivesList = ['Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver', 'Crystal', 'Cosmic', 'Electric', 'Mystic'];
-const nounsList = ['Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger', 'Falcon', 'Panther', 'Hawk', 'Bear'];
-
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -158,6 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('send-files-button').disabled = true;
         document.getElementById('selected-files-container').style.display = 'none';
         document.getElementById('selected-files-list').innerHTML = '';
+        document.getElementById('waiting-confirmation').style.display = 'none';
     }
 
     // File Transfer Modal Events
@@ -259,17 +248,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function sendFiles() {
         if (selectedFiles.length === 0) return;
 
-        document.getElementById('file-transfer-modal').style.display = 'none';
-        showProgressModal();
+        // Disable send button and show waiting message
+        document.getElementById('send-files-button').style.display = 'none';
+        document.getElementById('file-transfer-cancel-button').style.display = 'none';
+        document.getElementById('selected-files-container').style.display = 'none';
+        document.getElementById('file-drop-area').style.display = 'none';
+        document.getElementById('waiting-confirmation').style.display = 'block';
 
         peersManager.sendFiles(selectedPeer.id, selectedFiles);
     }
 
     function showProgressModal() {
         document.getElementById('progress-modal').style.display = 'flex';
-        transferProgress = 0;
-        transferStatus = 'Initiating Transfer...';
-        transferDetails = 'Preparing files...';
         updateProgressModal();
     }
 
@@ -287,16 +277,15 @@ document.addEventListener('DOMContentLoaded', function() {
         isReceivingFile = true;
         receivingDetails = {
             peer: peers[peerId],
-            fileCount: fileDetails.files.length,
-            totalSize: fileDetails.totalSize,
-            files: fileDetails.files
+            fileCount: fileDetails.fileCount,
+            totalSize: fileDetails.totalSize
         };
         showIncomingRequestModal();
     }
 
     function showIncomingRequestModal() {
         document.getElementById('incoming-request-modal').style.display = 'flex';
-        document.getElementById('incoming-peer-id').textContent = receivingDetails.peer.name.displayName;
+        document.getElementById('incoming-peer-name').textContent = receivingDetails.peer.name.displayName;
         document.getElementById('incoming-file-count').textContent = receivingDetails.fileCount;
         document.getElementById('incoming-total-size').textContent = formatFileSize(receivingDetails.totalSize);
     }
@@ -316,8 +305,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function acceptTransfer() {
         document.getElementById('incoming-request-modal').style.display = 'none';
         showProgressModal();
-        transferStatus = 'Receiving Files...';
+        transferStatus = 'Transferring...';
         transferProgress = 0;
+        updateProgressModal();
 
         // Inform the sender that the transfer is accepted
         peersManager.acceptTransfer(receivingDetails.peer.id);
@@ -326,7 +316,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function rejectTransfer() {
         document.getElementById('incoming-request-modal').style.display = 'none';
         isReceivingFile = false;
-        receivingDetails = null;
         // Inform the sender that the transfer was rejected
         peersManager.rejectTransfer(receivingDetails.peer.id);
     }
@@ -351,15 +340,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFilePreview() {
         const file = getCurrentFile();
         const filePreviewContainer = document.getElementById('file-preview-container');
-        const currentFileName = document.getElementById('current-file-name');
-        const currentFileSize = document.getElementById('current-file-size');
         const prevFileButton = document.getElementById('prev-file-button');
         const nextFileButton = document.getElementById('next-file-button');
         const filePagination = document.getElementById('file-pagination');
 
         filePreviewContainer.innerHTML = '';
-        currentFileName.textContent = file.name;
-        currentFileSize.textContent = formatFileSize(file.size);
 
         if (isImageFile(file)) {
             const img = document.createElement('img');
@@ -372,15 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const icon = document.createElement('i');
             icon.className = getFileIcon(file);
             icon.classList.add('text-6xl', 'text-[#333533]', 'mb-4');
-            const nameP = document.createElement('p');
-            nameP.className = 'text-[#333533]';
-            nameP.textContent = file.name;
-            const typeP = document.createElement('p');
-            typeP.className = 'text-sm text-gray-500';
-            typeP.textContent = file.type;
             div.appendChild(icon);
-            div.appendChild(nameP);
-            div.appendChild(typeP);
             filePreviewContainer.appendChild(div);
         }
 
@@ -438,19 +415,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    document.getElementById('download-file-button').addEventListener('click', function() {
-        downloadFile(getCurrentFile());
-    });
-
-    function downloadFile(file) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(file.blob);
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-
     // Event handlers for PeersManager events
     window.addEventListener('peers', function(e) {
         const peerList = e.detail;
@@ -490,12 +454,14 @@ document.addEventListener('DOMContentLoaded', function() {
         transferDetails = `${transferProgress}% complete`;
         updateProgressModal();
         if (transferProgress >= 100) {
-            transferStatus = 'Transfer Complete!';
-            transferDetails = 'All files have been received successfully';
+            transferStatus = isReceivingFile ? 'Transfer Complete!' : 'Transfer Complete!';
+            transferDetails = 'All files have been transferred successfully';
             updateProgressModal();
             setTimeout(() => {
                 hideProgressModal();
-                showFilePreviewModal();
+                if (isReceivingFile) {
+                    showFilePreviewModal();
+                }
             }, 2000);
         }
     });
@@ -504,356 +470,424 @@ document.addEventListener('DOMContentLoaded', function() {
         const file = e.detail;
         receivedFiles.push(file);
     });
-});
 
-// Additional classes and logic for ServerConnection, PeersManager, and RTCPeer
+    window.addEventListener('incoming-transfer-request', function(e) {
+        const data = e.detail;
+        handleIncomingTransfer(data.peerId, data.fileDetails);
+    });
 
-class ServerConnection {
-    constructor(deviceType) {
-        this.id = null;
-        this.socket = null;
-        this.deviceType = deviceType;
-        this.connect();
-    }
+    window.addEventListener('transfer-declined', function(e) {
+        document.getElementById('file-transfer-modal').style.display = 'none';
+        alert('Transfer was declined by the receiving device.');
+    });
 
-    connect() {
-        const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const endpoint = protocol + location.host;
-        this.socket = new WebSocket(endpoint);
+    // Additional classes and logic for ServerConnection, PeersManager, and RTCPeer
 
-        this.socket.onopen = () => {
-            console.log('Connected to signaling server');
-            // Send device info to server
-            this.send({
-                type: 'introduce',
-                name: {
-                    deviceType: this.deviceType
-                }
-            });
-        };
-
-        this.socket.onmessage = (message) => {
-            const data = JSON.parse(message.data);
-            this.handleMessage(data);
-        };
-
-        this.socket.onclose = () => {
-            console.log('Disconnected from signaling server');
-            setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
-        };
-
-        this.socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-    }
-
-    send(message) {
-        if (this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify(message));
+    class ServerConnection {
+        constructor(deviceType) {
+            this.id = null;
+            this.socket = null;
+            this.deviceType = deviceType;
+            this.displayName = '';
+            this.deviceName = '';
+            this.connect();
         }
-    }
 
-    handleMessage(message) {
-        switch (message.type) {
-            case 'display-name':
-                this.id = message.message.peerId;
-                this.displayName = message.message.displayName;
-                this.deviceName = message.message.deviceName;
-                // Update UI to show the displayName from the server
-                document.getElementById('device-name').textContent = this.displayName;
-                break;
-            case 'peers':
-                window.dispatchEvent(new CustomEvent('peers', { detail: message.peers }));
-                break;
-            case 'peer-joined':
-                window.dispatchEvent(new CustomEvent('peer-joined', { detail: message.peer }));
-                break;
-            case 'peer-left':
-                window.dispatchEvent(new CustomEvent('peer-left', { detail: message.peerId }));
-                break;
-            case 'peer-updated':
-                window.dispatchEvent(new CustomEvent('peer-updated', { detail: message.peer }));
-                break;
-            case 'signal':
-                window.dispatchEvent(new CustomEvent('signal', { detail: message }));
-                break;
-            case 'ping':
-                this.send({ type: 'pong' });
-                break;
-            default:
-                console.log('Unknown message type:', message.type);
-                break;
-        }
-    }
-}
+        connect() {
+            const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const endpoint = protocol + location.host;
+            this.socket = new WebSocket(endpoint);
 
-class PeersManager {
-    constructor(serverConnection) {
-        this.serverConnection = serverConnection;
-        this.peers = {};
-        this.fileSenders = {};
-        this.fileReceivers = {};
-
-        window.addEventListener('signal', (e) => this.handleSignal(e.detail));
-        window.addEventListener('peer-left', (e) => this.handlePeerLeft(e.detail));
-    }
-
-    handleSignal(message) {
-        const fromPeerId = message.sender;
-        const peer = this.getOrCreatePeer(fromPeerId, false); // Not initiator
-
-        if (message.sdp) {
-            peer.setRemoteDescription(message.sdp);
-        } else if (message.ice) {
-            peer.addIceCandidate(message.ice);
-        }
-    }
-
-    handlePeerLeft(peerId) {
-        if (this.peers[peerId]) {
-            this.peers[peerId].close();
-            delete this.peers[peerId];
-        }
-    }
-
-    getOrCreatePeer(peerId, isInitiator = false) {
-        if (!this.peers[peerId]) {
-            this.peers[peerId] = new RTCPeer(this.serverConnection, peerId, isInitiator);
-        }
-        return this.peers[peerId];
-    }
-
-    sendFiles(peerId, files) {
-        const peer = this.getOrCreatePeer(peerId, true); // Initiator
-        peer.sendFiles(files);
-    }
-
-    acceptTransfer(peerId) {
-        const peer = this.getOrCreatePeer(peerId);
-        peer.acceptTransfer();
-    }
-
-    rejectTransfer(peerId) {
-        const peer = this.getOrCreatePeer(peerId);
-        peer.rejectTransfer();
-    }
-}
-
-class RTCPeer {
-    constructor(serverConnection, peerId, isInitiator) {
-        this.serverConnection = serverConnection;
-        this.peerId = peerId;
-        this.isInitiator = isInitiator;
-        this.pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
-        });
-        this.channel = null;
-        this.fileReceiver = null;
-        this.fileSender = null;
-
-        this.pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.serverConnection.send({
-                    type: 'signal',
-                    to: this.peerId,
-                    ice: event.candidate
+            this.socket.onopen = () => {
+                console.log('Connected to signaling server');
+                // Send device info to server
+                this.send({
+                    type: 'introduce',
+                    name: {
+                        deviceType: this.deviceType
+                    }
                 });
+            };
+
+            this.socket.onmessage = (message) => {
+                const data = JSON.parse(message.data);
+                this.handleMessage(data);
+            };
+
+            this.socket.onclose = () => {
+                console.log('Disconnected from signaling server');
+                setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
+            };
+
+            this.socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        send(message) {
+            if (this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(JSON.stringify(message));
             }
-        };
+        }
 
-        this.pc.ondatachannel = (event) => {
-            this.channel = event.channel;
-            this.setupDataChannel();
-        };
-
-        if (this.isInitiator) {
-            this.channel = this.pc.createDataChannel('fileTransfer');
-            this.setupDataChannel();
-            this.createOffer();
+        handleMessage(message) {
+            switch (message.type) {
+                case 'display-name':
+                    this.id = message.message.peerId;
+                    this.displayName = message.message.displayName;
+                    this.deviceName = message.message.deviceName;
+                    // Update UI to show the displayName from the server
+                    document.getElementById('device-name').textContent = this.displayName;
+                    break;
+                case 'peers':
+                    window.dispatchEvent(new CustomEvent('peers', { detail: message.peers }));
+                    break;
+                case 'peer-joined':
+                    window.dispatchEvent(new CustomEvent('peer-joined', { detail: message.peer }));
+                    break;
+                case 'peer-left':
+                    window.dispatchEvent(new CustomEvent('peer-left', { detail: message.peerId }));
+                    break;
+                case 'peer-updated':
+                    window.dispatchEvent(new CustomEvent('peer-updated', { detail: message.peer }));
+                    break;
+                case 'signal':
+                    window.dispatchEvent(new CustomEvent('signal', { detail: message }));
+                    break;
+                case 'transfer-request':
+                    window.dispatchEvent(new CustomEvent('transfer-request', { detail: message }));
+                    break;
+                case 'transfer-accept':
+                    window.dispatchEvent(new CustomEvent('transfer-accept', { detail: message }));
+                    break;
+                case 'transfer-decline':
+                    window.dispatchEvent(new CustomEvent('transfer-decline', { detail: message }));
+                    break;
+                case 'ping':
+                    this.send({ type: 'pong' });
+                    break;
+                default:
+                    console.log('Unknown message type:', message.type);
+                    break;
+            }
         }
     }
 
-    createOffer() {
-        this.pc.createOffer().then((offer) => {
-            return this.pc.setLocalDescription(offer);
-        }).then(() => {
+    class PeersManager {
+        constructor(serverConnection) {
+            this.serverConnection = serverConnection;
+            this.peers = {};
+            this.filesToSend = {};
+            this.peerIdToSend = null;
+
+            window.addEventListener('signal', (e) => this.handleSignal(e.detail));
+            window.addEventListener('peer-left', (e) => this.handlePeerLeft(e.detail));
+            window.addEventListener('transfer-request', (e) => this.handleTransferRequest(e.detail));
+            window.addEventListener('transfer-accept', (e) => this.handleTransferAccept(e.detail));
+            window.addEventListener('transfer-decline', (e) => this.handleTransferDecline(e.detail));
+        }
+
+        handleSignal(message) {
+            const fromPeerId = message.sender;
+            const peer = this.getOrCreatePeer(fromPeerId, false); // Not initiator
+
+            if (message.sdp) {
+                peer.setRemoteDescription(message.sdp);
+            } else if (message.ice) {
+                peer.addIceCandidate(message.ice);
+            }
+        }
+
+        handlePeerLeft(peerId) {
+            if (this.peers[peerId]) {
+                this.peers[peerId].close();
+                delete this.peers[peerId];
+            }
+        }
+
+        getOrCreatePeer(peerId, isInitiator = false) {
+            if (!this.peers[peerId]) {
+                this.peers[peerId] = new RTCPeer(this.serverConnection, peerId, isInitiator);
+            }
+            return this.peers[peerId];
+        }
+
+        sendFiles(peerId, files) {
+            // Store the files to be sent
+            this.filesToSend[peerId] = files;
+            this.peerIdToSend = peerId;
+
+            // Send a transfer request via the server
             this.serverConnection.send({
-                type: 'signal',
-                to: this.peerId,
-                sdp: this.pc.localDescription
+                type: 'transfer-request',
+                to: peerId,
+                fileDetails: {
+                    fileCount: files.length,
+                    totalSize: files.reduce((acc, file) => acc + file.size, 0)
+                },
+                senderName: this.serverConnection.displayName
             });
-        }).catch(console.error);
+        }
+
+        acceptTransfer(peerId) {
+            // Send 'transfer-accept' message via server
+            this.serverConnection.send({
+                type: 'transfer-accept',
+                to: peerId
+            });
+
+            // Proceed to create RTCPeer and get ready to receive files
+            const peer = this.getOrCreatePeer(peerId, false); // Not initiator
+            peer.setupDataChannel();
+        }
+
+        rejectTransfer(peerId) {
+            // Send 'transfer-decline' message via server
+            this.serverConnection.send({
+                type: 'transfer-decline',
+                to: peerId
+            });
+        }
+
+        handleTransferRequest(message) {
+            const fromPeerId = message.sender;
+            const fileDetails = message.fileDetails;
+            const senderName = peers[fromPeerId]?.name?.displayName || 'Unknown';
+
+            // Dispatch an event to handle incoming transfer request
+            window.dispatchEvent(new CustomEvent('incoming-transfer-request', { detail: { peerId: fromPeerId, fileDetails, senderName } }));
+        }
+
+        handleTransferAccept(message) {
+            const fromPeerId = message.sender;
+            const peer = this.getOrCreatePeer(fromPeerId, true); // Initiator
+            peer.sendFiles(this.filesToSend[fromPeerId]);
+        }
+
+        handleTransferDecline(message) {
+            const fromPeerId = message.sender;
+            // Notify the sending device that the transfer was declined
+            window.dispatchEvent(new CustomEvent('transfer-declined', { detail: { peerId: fromPeerId } }));
+        }
     }
 
-    setRemoteDescription(sdp) {
-        this.pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(() => {
-            if (sdp.type === 'offer') {
-                return this.pc.createAnswer().then((answer) => {
-                    return this.pc.setLocalDescription(answer);
-                }).then(() => {
+    class RTCPeer {
+        constructor(serverConnection, peerId, isInitiator) {
+            this.serverConnection = serverConnection;
+            this.peerId = peerId;
+            this.isInitiator = isInitiator;
+            this.pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            });
+            this.channel = null;
+            this.fileReceiver = null;
+            this.fileSender = null;
+
+            this.pc.onicecandidate = (event) => {
+                if (event.candidate) {
                     this.serverConnection.send({
                         type: 'signal',
                         to: this.peerId,
-                        sdp: this.pc.localDescription
+                        ice: event.candidate
                     });
+                }
+            };
+
+            this.pc.ondatachannel = (event) => {
+                this.channel = event.channel;
+                this.setupDataChannel();
+            };
+
+            if (this.isInitiator) {
+                // Do not create data channel until transfer is accepted
+            }
+        }
+
+        setupDataChannel() {
+            if (this.isInitiator) {
+                this.channel = this.pc.createDataChannel('fileTransfer');
+                this.channel.onopen = () => {
+                    console.log('Data channel opened with', this.peerId);
+                    if (this.fileSender) {
+                        this.fileSender.sendNextFile();
+                    }
+                };
+            }
+
+            this.channel.onmessage = (event) => {
+                this.handleMessage(event.data);
+            };
+
+            this.channel.onerror = (error) => {
+                console.error('Data channel error:', error);
+            };
+
+            this.channel.onclose = () => {
+                console.log('Data channel closed with', this.peerId);
+            };
+
+            if (this.isInitiator) {
+                this.createOffer();
+            }
+        }
+
+        createOffer() {
+            this.pc.createOffer().then((offer) => {
+                return this.pc.setLocalDescription(offer);
+            }).then(() => {
+                this.serverConnection.send({
+                    type: 'signal',
+                    to: this.peerId,
+                    sdp: this.pc.localDescription
                 });
+            }).catch(console.error);
+        }
+
+        setRemoteDescription(sdp) {
+            this.pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(() => {
+                if (sdp.type === 'offer') {
+                    return this.pc.createAnswer().then((answer) => {
+                        return this.pc.setLocalDescription(answer);
+                    }).then(() => {
+                        this.serverConnection.send({
+                            type: 'signal',
+                            to: this.peerId,
+                            sdp: this.pc.localDescription
+                        });
+                    });
+                }
+            }).catch(console.error);
+        }
+
+        addIceCandidate(candidate) {
+            this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+        }
+
+        handleMessage(message) {
+            if (typeof message === 'string') {
+                const data = JSON.parse(message);
+                if (data.type === 'file-header') {
+                    // Start receiving a file
+                    this.fileReceiver = new FileReceiver(data.fileInfo, this.channel);
+                } else if (data.type === 'transfer-complete') {
+                    // File transfer completed
+                    window.dispatchEvent(new CustomEvent('file-received', { detail: this.fileReceiver.file }));
+                }
+            } else {
+                // Binary data (file chunks)
+                if (this.fileReceiver) {
+                    this.fileReceiver.receiveChunk(message);
+                    const progress = this.fileReceiver.getProgress();
+                    window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: progress } }));
+                }
             }
-        }).catch(console.error);
-    }
+        }
 
-    addIceCandidate(candidate) {
-        this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
-    }
+        sendFiles(files) {
+            this.fileSender = new FileSender(files, this.channel);
 
-    setupDataChannel() {
-        this.channel.onopen = () => {
-            console.log('Data channel opened with', this.peerId);
-            if (this.fileSender && this.fileSender.hasFiles()) {
+            if (this.channel && this.channel.readyState === 'open') {
                 this.fileSender.sendNextFile();
+            } else {
+                this.channel.onopen = () => {
+                    this.fileSender.sendNextFile();
+                };
             }
-        };
+        }
 
-        this.channel.onmessage = (event) => {
-            console.log('Received message from', this.peerId);
-            this.handleMessage(event.data);
-        };
-
-        this.channel.onerror = (error) => {
-            console.error('Data channel error:', error);
-        };
-
-        this.channel.onclose = () => {
-            console.log('Data channel closed with', this.peerId);
-        };
-    }
-
-    handleMessage(message) {
-        if (typeof message === 'string') {
-            const data = JSON.parse(message);
-            if (data.type === 'file-header') {
-                // Start receiving a file
-                this.fileReceiver = new FileReceiver(data.fileInfo, this.channel);
-            } else if (data.type === 'transfer-complete') {
-                // File transfer completed
-                window.dispatchEvent(new CustomEvent('file-received', { detail: this.fileReceiver.file }));
+        close() {
+            if (this.channel) {
+                this.channel.close();
             }
-        } else {
-            // Binary data (file chunks)
-            if (this.fileReceiver) {
-                this.fileReceiver.receiveChunk(message);
-                const progress = this.fileReceiver.getProgress();
-                window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: progress } }));
+            if (this.pc) {
+                this.pc.close();
             }
         }
     }
 
-    sendFiles(files) {
-        this.fileSender = new FileSender(files, this.channel);
+    class FileSender {
+        constructor(files, channel) {
+            this.files = files;
+            this.channel = channel;
+            this.fileIndex = 0;
+            this.chunkSize = 16 * 1024; // 16 KB
+        }
 
-        if (this.channel && this.channel.readyState === 'open') {
-            this.fileSender.sendNextFile();
-        } else {
-            this.channel.onopen = () => {
-                this.fileSender.sendNextFile();
+        sendNextFile() {
+            if (this.fileIndex >= this.files.length) {
+                // All files sent
+                window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: 1 } }));
+                return;
+            }
+            const file = this.files[this.fileIndex];
+            const fileInfo = {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            };
+            this.channel.send(JSON.stringify({ type: 'file-header', fileInfo: fileInfo }));
+            this.sendFileChunks(file);
+        }
+
+        sendFileChunks(file) {
+            const reader = new FileReader();
+            let offset = 0;
+
+            reader.onload = (event) => {
+                this.channel.send(event.target.result);
+                offset += event.target.result.byteLength;
+
+                const totalSize = this.files.reduce((acc, f) => acc + f.size, 0);
+                const sentSize = this.files.slice(0, this.fileIndex).reduce((acc, f) => acc + f.size, 0) + offset;
+                const progress = sentSize / totalSize;
+
+                window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: progress } }));
+
+                if (offset < file.size) {
+                    readSlice();
+                } else {
+                    this.channel.send(JSON.stringify({ type: 'transfer-complete' }));
+                    this.fileIndex++;
+                    this.sendNextFile();
+                }
+            };
+
+            const readSlice = () => {
+                const slice = file.slice(offset, offset + this.chunkSize);
+                reader.readAsArrayBuffer(slice);
+            };
+
+            readSlice();
+        }
+    }
+
+    class FileReceiver {
+        constructor(fileInfo, channel) {
+            this.fileInfo = fileInfo;
+            this.channel = channel;
+            this.receivedBuffers = [];
+            this.receivedSize = 0;
+        }
+
+        receiveChunk(chunk) {
+            this.receivedBuffers.push(chunk);
+            this.receivedSize += chunk.byteLength;
+        }
+
+        getProgress() {
+            return this.receivedSize / this.fileInfo.size;
+        }
+
+        get file() {
+            const blob = new Blob(this.receivedBuffers, { type: this.fileInfo.type });
+            return {
+                name: this.fileInfo.name,
+                size: this.fileInfo.size,
+                type: this.fileInfo.type,
+                blob: blob
             };
         }
     }
-
-    acceptTransfer() {
-        // Logic to accept transfer (if needed)
-    }
-
-    rejectTransfer() {
-        // Logic to reject transfer (if needed)
-    }
-
-    close() {
-        if (this.channel) {
-            this.channel.close();
-        }
-        if (this.pc) {
-            this.pc.close();
-        }
-    }
-}
-
-class FileSender {
-    constructor(files, channel) {
-        this.files = files;
-        this.channel = channel;
-        this.fileIndex = 0;
-        this.chunkSize = 16 * 1024; // 16 KB
-    }
-
-    sendNextFile() {
-        if (this.fileIndex >= this.files.length) {
-            return;
-        }
-        const file = this.files[this.fileIndex];
-        const fileInfo = {
-            name: file.name,
-            size: file.size,
-            type: file.type
-        };
-        this.channel.send(JSON.stringify({ type: 'file-header', fileInfo: fileInfo }));
-        this.sendFileChunks(file);
-    }
-
-    sendFileChunks(file) {
-        const reader = new FileReader();
-        let offset = 0;
-
-        reader.onload = (event) => {
-            this.channel.send(event.target.result);
-            offset += event.target.result.byteLength;
-
-            const progress = offset / file.size;
-            window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress: progress } }));
-
-            if (offset < file.size) {
-                readSlice();
-            } else {
-                this.channel.send(JSON.stringify({ type: 'transfer-complete' }));
-                this.fileIndex++;
-                this.sendNextFile();
-            }
-        };
-
-        const readSlice = () => {
-            const slice = file.slice(offset, offset + this.chunkSize);
-            reader.readAsArrayBuffer(slice);
-        };
-
-        readSlice();
-    }
-}
-
-class FileReceiver {
-    constructor(fileInfo, channel) {
-        this.fileInfo = fileInfo;
-        this.channel = channel;
-        this.receivedBuffers = [];
-        this.receivedSize = 0;
-    }
-
-    receiveChunk(chunk) {
-        this.receivedBuffers.push(chunk);
-        this.receivedSize += chunk.byteLength;
-    }
-
-    getProgress() {
-        return this.receivedSize / this.fileInfo.size;
-    }
-
-    get file() {
-        const blob = new Blob(this.receivedBuffers, { type: this.fileInfo.type });
-        return {
-            name: this.fileInfo.name,
-            size: this.fileInfo.size,
-            type: this.fileInfo.type,
-            blob: blob
-        };
-    }
-}
+});
