@@ -8,6 +8,8 @@ const MAX_BUFFER_SIZE = 1024 * 1024; // 1 MB buffer threshold
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second delay between retries
 
+const CHUNK_SEQUENCE = new Map(); // To track chunk sequences
+
 // Utility functions
 function generateDeviceName() {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
@@ -40,22 +42,35 @@ function detectDeviceType() {
 }
 
 // Helper function for sending file chunks with buffer management
-async function sendFileChunk(channel, chunk, retryCount = 0) {
+async function sendFileChunk(channel, chunk, sequenceNumber = null) {
     return new Promise((resolve, reject) => {
         const sendChunk = () => {
             try {
-                // Check if we need to wait for buffer to clear
                 if (channel.bufferedAmount > MAX_BUFFER_SIZE) {
                     setTimeout(sendChunk, 100);
                     return;
                 }
 
-                channel.send(chunk);
+                // If it's a binary chunk, wrap it with metadata
+                if (chunk instanceof ArrayBuffer) {
+                    const metadata = {
+                        sequence: sequenceNumber,
+                        size: chunk.byteLength,
+                        isLast: false
+                    };
+                    
+                    // Send metadata first
+                    channel.send(JSON.stringify({ type: 'chunk-metadata', ...metadata }));
+                    // Then send the actual chunk
+                    channel.send(chunk);
+                } else {
+                    channel.send(chunk);
+                }
                 resolve();
             } catch (error) {
                 if (retryCount < MAX_RETRIES) {
                     setTimeout(() => {
-                        sendFileChunk(channel, chunk, retryCount + 1)
+                        sendFileChunk(channel, chunk, sequenceNumber)
                             .then(resolve)
                             .catch(reject);
                     }, RETRY_DELAY);
@@ -118,6 +133,7 @@ function appData() {
         currentFileIndex: 0,
         receivedFiles: [],
         retryQueue: new Map(),
+        fileSequences: new Map(),
 
         // Initialize the application
         init() {
@@ -504,24 +520,25 @@ function appData() {
                     // Send file chunks
                     let offset = 0;
                     let retryCount = 0;
-
+                    let sequence = 0;
                     while (offset < file.size && !this.transferAborted) {
                         try {
                             const chunkSize = Math.min(CHUNK_SIZE, file.size - offset);
                             const chunk = file.slice(offset, offset + chunkSize);
                             const buffer = await chunk.arrayBuffer();
-
-                            await sendFileChunk(channel, buffer);
+                    
+                            // Send chunk with sequence number
+                            await sendFileChunk(channel, buffer, sequence);
                             offset += buffer.byteLength;
-
+                    
                             // Update progress
                             const fileProgress = Math.round((offset / file.size) * 100);
                             const totalProgress = Math.round((offset + this.getCompletedFilesSize(i)) / totalSize * 100);
                             
                             this.transferProgress = totalProgress;
                             this.transferDetails = `File ${fileNumber}/${totalFiles}: ${file.name} - ${fileProgress}%`;
-
-                            // Reset retry count on successful chunk
+                    
+                            sequence++;
                             retryCount = 0;
                         } catch (error) {
                             console.error(`Error sending chunk at offset ${offset}:`, error);
@@ -529,7 +546,7 @@ function appData() {
                             if (retryCount >= MAX_RETRIES) {
                                 throw new Error(`Failed to send file chunk after ${MAX_RETRIES} attempts`);
                             }
-
+                    
                             retryCount++;
                             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
                             continue;
@@ -576,37 +593,75 @@ function appData() {
                     console.warn('Received chunk but transfer not active');
                     return;
                 }
-
+        
                 const fileData = this.fileChunks.get(this.currentReceivingFileName);
                 if (!fileData) {
                     console.error('No file data found for:', this.currentReceivingFileName);
                     return;
                 }
-
-                // Add chunk
-                fileData.chunks.push(chunk);
-                fileData.size += chunk.byteLength;
-
-                // Verify size hasn't exceeded expected
-                if (fileData.size > fileData.expectedSize) {
-                    throw new Error(`Size exceeded expectations: ${fileData.size} > ${fileData.expectedSize}`);
+        
+                // Track sequence for this file
+                if (!this.fileSequences.has(this.currentReceivingFileName)) {
+                    this.fileSequences.set(this.currentReceivingFileName, {
+                        expectedSequence: 0,
+                        chunks: new Map()
+                    });
                 }
-
+        
+                const sequenceData = this.fileSequences.get(this.currentReceivingFileName);
+        
+                // If this is metadata for the next chunk
+                if (typeof chunk === 'string') {
+                    try {
+                        const metadata = JSON.parse(chunk);
+                        if (metadata.type === 'chunk-metadata') {
+                            sequenceData.expectedMetadata = metadata;
+                            return;
+                        }
+                    } catch (e) {
+                        // Not JSON metadata, continue processing as chunk
+                    }
+                }
+        
+                // If we have metadata for this chunk
+                if (sequenceData.expectedMetadata) {
+                    const metadata = sequenceData.expectedMetadata;
+                    
+                    // Verify chunk size
+                    if (chunk.byteLength !== metadata.size) {
+                        throw new Error(`Chunk size mismatch: expected ${metadata.size}, got ${chunk.byteLength}`);
+                    }
+        
+                    // Store chunk with sequence number
+                    fileData.chunks[metadata.sequence] = chunk;
+                    fileData.size += chunk.byteLength;
+        
+                    sequenceData.expectedMetadata = null;
+                } else {
+                    // Fallback for chunks without metadata
+                    fileData.chunks.push(chunk);
+                    fileData.size += chunk.byteLength;
+                }
+        
                 // Update progress
                 const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + fileData.size;
                 const totalSize = this.totalTransferSize;
-
+        
                 const fileProgress = Math.round((fileData.size / fileData.expectedSize) * 100);
                 this.transferProgress = Math.round((totalReceived / totalSize) * 100);
-
+        
                 this.transferDetails = `${fileData.metadata.name}: ${fileProgress}% (${formatFileSize(fileData.size)} of ${formatFileSize(fileData.expectedSize)})`;
                 this.transferStatus = `Overall Progress: ${this.transferProgress}%`;
-
-                // Check if chunk completes the file
+        
+                // Check if we have all chunks
                 if (fileData.size === fileData.expectedSize) {
+                    // Sort chunks by sequence number if available
+                    if (fileData.chunks instanceof Map) {
+                        fileData.chunks = Array.from(fileData.chunks.values());
+                    }
                     await this.finalizeFile(this.currentReceivingFileName);
                 }
-
+        
             } catch (error) {
                 console.error('Error handling file chunk:', error);
                 this.handleTransferError(error);
@@ -618,75 +673,167 @@ function appData() {
             try {
                 const fileData = this.fileChunks.get(fileName);
                 if (!fileData || this.transferAborted) return;
-        
-                // Verify final size with logging
-                const totalSize = calculateTotalSize(fileData.chunks);
-                console.log(`Finalizing file ${fileName}:`, {
-                    receivedSize: totalSize,
-                    expectedSize: fileData.expectedSize,
-                    chunksCount: fileData.chunks.length
-                });
-        
-                if (!verifyFileIntegrity(fileData.chunks, fileData.expectedSize, fileName)) {
-                    throw new Error(`Size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${totalSize}`);
+
+                // Initialize retry mechanism
+                let retryCount = 0;
+                const maxRetries = 3;
+                const retryDelay = 1000; // 1 second between retries
+                let success = false;
+
+                while (retryCount < maxRetries && !success) {
+                    try {
+                        // Verify final size with logging
+                        const totalSize = calculateTotalSize(fileData.chunks);
+                        console.log(`Attempt ${retryCount + 1} - Finalizing file ${fileName}:`, {
+                            receivedSize: totalSize,
+                            expectedSize: fileData.expectedSize,
+                            chunksCount: fileData.chunks.length,
+                            difference: Math.abs(totalSize - fileData.expectedSize)
+                        });
+
+                        // Allow for small size differences (up to one chunk size)
+                        const sizeDifference = Math.abs(totalSize - fileData.expectedSize);
+                        if (sizeDifference > CHUNK_SIZE) {
+                            if (retryCount < maxRetries - 1) {
+                                console.log(`Size difference too large (${sizeDifference} bytes), retrying...`);
+                                retryCount++;
+                                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                continue;
+                            } else {
+                                throw new Error(`Size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${totalSize}`);
+                            }
+                        }
+
+                        // Organize chunks if they're stored with sequence numbers
+                        let finalChunks = fileData.chunks;
+                        if (fileData.chunks instanceof Map) {
+                            finalChunks = Array.from(fileData.chunks.values());
+                        }
+
+                        // Create blob with explicit type
+                        const blob = new Blob(finalChunks, {
+                            type: fileData.metadata.type || 'application/octet-stream'
+                        });
+
+                        // Verify blob size
+                        console.log(`Blob created for ${fileName}:`, {
+                            blobSize: blob.size,
+                            expectedSize: fileData.expectedSize,
+                            type: fileData.metadata.type,
+                            difference: Math.abs(blob.size - fileData.expectedSize)
+                        });
+
+                        if (Math.abs(blob.size - fileData.expectedSize) > CHUNK_SIZE) {
+                            if (retryCount < maxRetries - 1) {
+                                console.log(`Blob size mismatch (${blob.size} vs ${fileData.expectedSize}), retrying...`);
+                                retryCount++;
+                                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                continue;
+                            } else {
+                                throw new Error(`Blob size mismatch for ${fileName}: expected ${fileData.expectedSize}, got ${blob.size}`);
+                            }
+                        }
+
+                        // Create the file object
+                        const url = URL.createObjectURL(blob);
+                        const completeFile = {
+                            name: fileName,
+                            size: blob.size,
+                            type: fileData.metadata.type,
+                            preview: fileData.metadata.type?.startsWith('image/') ? url : null,
+                            url: url,
+                            blob: blob
+                        };
+
+                        // Add to received files
+                        this.receivedFiles.push(completeFile);
+                        this.currentFileIndex = this.receivedFiles.length - 1;
+                        fileData.isComplete = true;
+
+                        // Clean up chunks and sequence data
+                        this.fileChunks.delete(fileName);
+                        this.fileSequences?.delete(fileName);
+
+                        // Send acknowledgment with retry
+                        const channel = this.dataChannels.get(this.receivingDetails.peer.id);
+                        if (channel) {
+                            let ackSent = false;
+                            let ackRetries = 0;
+                            const maxAckRetries = 3;
+
+                            while (!ackSent && ackRetries < maxAckRetries) {
+                                try {
+                                    await sendFileChunk(channel, JSON.stringify({
+                                        type: 'file-received',
+                                        fileName: fileName,
+                                        size: blob.size,
+                                        status: 'success'
+                                    }));
+                                    ackSent = true;
+                                } catch (error) {
+                                    console.warn(`Failed to send acknowledgment, attempt ${ackRetries + 1}/${maxAckRetries}`);
+                                    ackRetries++;
+                                    if (ackRetries < maxAckRetries) {
+                                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                    }
+                                }
+                            }
+
+                            if (!ackSent) {
+                                console.error('Failed to send file acknowledgment after all retries');
+                            }
+                        }
+
+                        // All verifications passed
+                        success = true;
+
+                        // Check if all files are complete
+                        if (this.receivedFiles.length === this.totalTransferFiles) {
+                            console.log('All files processed successfully:', {
+                                receivedCount: this.receivedFiles.length,
+                                totalExpected: this.totalTransferFiles
+                            });
+
+                            this.transferStatus = 'Transfer Complete!';
+                            this.transferDetails = 'All files received successfully';
+
+                            setTimeout(() => {
+                                this.showProgress = false;
+                                this.isReceivingFile = false;
+                                this.showFilePreview = true;
+                                toastr.success('Files received successfully.', 'Transfer Complete');
+                            }, 1000);
+                        }
+
+                    } catch (retryError) {
+                        console.warn(`Attempt ${retryCount + 1} failed:`, retryError);
+                        if (retryCount < maxRetries - 1) {
+                            retryCount++;
+                            await new Promise(resolve => setTimeout(resolve, retryDelay));
+                        } else {
+                            throw retryError;
+                        }
+                    }
                 }
-        
-                // Create blob with explicit type
-                const blob = new Blob(fileData.chunks, {
-                    type: fileData.metadata.type || 'application/octet-stream'
-                });
-        
-                // Add additional logging
-                console.log(`Blob created for ${fileName}:`, {
-                    blobSize: blob.size,
-                    expectedSize: fileData.expectedSize,
-                    type: fileData.metadata.type
-                });
-        
-                const url = URL.createObjectURL(blob);
-                const completeFile = {
-                    name: fileName,
-                    size: blob.size,
-                    type: fileData.metadata.type,
-                    preview: fileData.metadata.type?.startsWith('image/') ? url : null,
-                    url: url,
-                    blob: blob
-                };
-        
-                this.receivedFiles.push(completeFile);
-                this.currentFileIndex = this.receivedFiles.length - 1; // Set current index to latest file
-                fileData.isComplete = true;
-        
-                // Clean up chunks
-                this.fileChunks.delete(fileName);
-        
-                // Send acknowledgment
-                const channel = this.dataChannels.get(this.receivingDetails.peer.id);
-                if (channel) {
-                    await sendFileChunk(channel, JSON.stringify({
-                        type: 'file-received',
-                        fileName: fileName,
-                        size: blob.size
-                    }));
-                }
-        
-                // Check if all files complete
-                if (this.receivedFiles.length === this.totalTransferFiles) {
-                    this.transferStatus = 'Transfer Complete!';
-                    this.transferDetails = 'All files received successfully';
-                    console.log('All files received successfully');
-        
-                    setTimeout(() => {
-                        this.showProgress = false;
-                        this.isReceivingFile = false;
-                        this.showFilePreview = true;
-                        toastr.success('Files received successfully.', 'Transfer Complete');
-                    }, 1000);
-                }
-        
+
             } catch (error) {
                 console.error(`Error finalizing file ${fileName}:`, error);
                 this.handleTransferError(error);
+
+                // Try to notify sender of failure
+                try {
+                    const channel = this.dataChannels.get(this.receivingDetails.peer.id);
+                    if (channel) {
+                        await sendFileChunk(channel, JSON.stringify({
+                            type: 'file-received',
+                            fileName: fileName,
+                            status: 'error',
+                            error: error.message
+                        }));
+                    }
+                } catch (notifyError) {
+                    console.error('Failed to notify sender of error:', notifyError);
+                }
             }
         },
 
