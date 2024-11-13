@@ -4,9 +4,9 @@ const nouns = ['Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger', 'Falcon', 
 
 // Constants for file transfer
 const CHUNK_SIZE = 16 * 1024; // 16 KB chunks for better handling
-const MAX_BUFFER_SIZE = 1024 * 1024; // 1 MB buffer threshold
+const MAX_BUFFER_SIZE = 8 * 1024 * 1024; // 8 MB buffer threshold
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second delay between retries
+const RETRY_DELAY = 2000; // 1 second delay between retries
 
 const CHUNK_SEQUENCE = new Map(); // To track chunk sequences
 
@@ -42,7 +42,7 @@ function detectDeviceType() {
 }
 
 // Helper function for sending file chunks with buffer management
-async function sendFileChunk(channel, chunk, sequenceNumber = null) {
+async function sendFileChunk(channel, chunk, sequenceNumber = null, fileName = null) {
     return new Promise((resolve, reject) => {
         const sendChunk = () => {
             try {
@@ -54,14 +54,15 @@ async function sendFileChunk(channel, chunk, sequenceNumber = null) {
                 // If it's a binary chunk, wrap it with metadata
                 if (chunk instanceof ArrayBuffer) {
                     const metadata = {
+                        type: 'chunk-metadata',
                         sequence: sequenceNumber,
                         size: chunk.byteLength,
+                        fileName: fileName, // Include fileName here
                         isLast: false
                     };
-                    
-                    // Send metadata first
-                    channel.send(JSON.stringify({ type: 'chunk-metadata', ...metadata }));
-                    // Then send the actual chunk
+            
+                    // Send metadata and chunk together
+                    channel.send(JSON.stringify(metadata));
                     channel.send(chunk);
                 } else {
                     channel.send(chunk);
@@ -528,7 +529,7 @@ function appData() {
                             const buffer = await chunk.arrayBuffer();
                     
                             // Send chunk with sequence number
-                            await sendFileChunk(channel, buffer, sequence);
+                            await sendFileChunk(channel, buffer, sequence, file.name);
                             offset += buffer.byteLength;
                     
                             // Update progress
@@ -594,54 +595,77 @@ function appData() {
                     return;
                 }
         
-                const fileData = this.fileChunks.get(this.currentReceivingFileName);
-                if (!fileData) {
-                    console.error('No file data found for:', this.currentReceivingFileName);
-                    return;
-                }
-        
-                // Track sequence for this file
-                if (!this.fileSequences.has(this.currentReceivingFileName)) {
-                    this.fileSequences.set(this.currentReceivingFileName, {
-                        expectedSequence: 0,
-                        chunks: new Map()
-                    });
-                }
-        
-                const sequenceData = this.fileSequences.get(this.currentReceivingFileName);
-        
-                // If this is metadata for the next chunk
                 if (typeof chunk === 'string') {
+                    // This is likely a metadata message
                     try {
                         const metadata = JSON.parse(chunk);
+        
                         if (metadata.type === 'chunk-metadata') {
-                            sequenceData.expectedMetadata = metadata;
-                            return;
+                            const { fileName, sequence, size } = metadata;
+        
+                            // Initialize fileData if not present
+                            if (!this.fileChunks.has(fileName)) {
+                                this.fileChunks.set(fileName, {
+                                    chunks: {},
+                                    size: 0,
+                                    metadata: { name: fileName },
+                                    isComplete: false,
+                                    expectedSize: 0 // Will be set when 'file-metadata' is received
+                                });
+                            }
+        
+                            // Store expected metadata for this file
+                            if (!this.fileSequences.has(fileName)) {
+                                this.fileSequences.set(fileName, {
+                                    expectedMetadata: metadata
+                                });
+                            } else {
+                                this.fileSequences.get(fileName).expectedMetadata = metadata;
+                            }
+        
+                            return; // Since we processed metadata, we return
                         }
                     } catch (e) {
                         // Not JSON metadata, continue processing as chunk
                     }
                 }
         
-                // If we have metadata for this chunk
-                if (sequenceData.expectedMetadata) {
-                    const metadata = sequenceData.expectedMetadata;
-                    
-                    // Verify chunk size
-                    if (chunk.byteLength !== metadata.size) {
-                        throw new Error(`Chunk size mismatch: expected ${metadata.size}, got ${chunk.byteLength}`);
-                    }
+                // At this point, we have a binary chunk
+                // Find the fileName from the expected metadata
+                let fileName = null;
+                let sequenceData = null;
         
-                    // Store chunk with sequence number
+                // Find the file that is expecting this chunk
+                for (let [fname, seqData] of this.fileSequences.entries()) {
+                    if (seqData.expectedMetadata && !seqData.expectedMetadata.processed) {
+                        fileName = fname;
+                        sequenceData = seqData;
+                        break;
+                    }
+                }
+        
+                if (!fileName) {
+                    console.error('No expected metadata found for incoming chunk');
+                    return;
+                }
+        
+                const fileData = this.fileChunks.get(fileName);
+                const metadata = sequenceData.expectedMetadata;
+        
+                // Verify chunk size
+                if (chunk.byteLength !== metadata.size) {
+                    throw new Error(`Chunk size mismatch for file ${fileName}: expected ${metadata.size}, got ${chunk.byteLength}`);
+                }
+        
+                // Store chunk with sequence number
+                if (!fileData.chunks[metadata.sequence]) {
                     fileData.chunks[metadata.sequence] = chunk;
                     fileData.size += chunk.byteLength;
-        
-                    sequenceData.expectedMetadata = null;
                 } else {
-                    // Fallback for chunks without metadata
-                    fileData.chunks.push(chunk);
-                    fileData.size += chunk.byteLength;
+                    console.warn(`Duplicate chunk received for sequence ${metadata.sequence} of file ${fileName}`);
                 }
+        
+                sequenceData.expectedMetadata.processed = true; // Mark this chunk-metadata as processed
         
                 // Update progress
                 const totalReceived = this.receivedFiles.reduce((acc, file) => acc + file.size, 0) + fileData.size;
@@ -655,11 +679,13 @@ function appData() {
         
                 // Check if we have all chunks
                 if (fileData.size === fileData.expectedSize) {
-                    // Sort chunks by sequence number if available
-                    if (fileData.chunks instanceof Map) {
-                        fileData.chunks = Array.from(fileData.chunks.values());
-                    }
-                    await this.finalizeFile(this.currentReceivingFileName);
+                    // Sort chunks by sequence number
+                    const sortedChunks = Object.keys(fileData.chunks)
+                        .sort((a, b) => a - b)
+                        .map(key => fileData.chunks[key]);
+                    fileData.chunks = sortedChunks;
+        
+                    await this.finalizeFile(fileName);
                 }
         
             } catch (error) {
