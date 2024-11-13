@@ -4,7 +4,7 @@
     <!-- Meta and Title -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drpl.co Dev 7</title>
+    <title>Drpl.co Dev 8</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -454,10 +454,10 @@
                 </div>
 
                 <!-- File Info & Controls -->
-                <div class="flex justify-between items-center">
+                <div class="flex justify-between items-center" x-show="getCurrentFile()">
                     <div>
-                        <p class="font-semibold text-[#242423]" x-text="getCurrentFile().name"></p>
-                        <p class="text-sm text-gray-500" x-text="formatFileSize(getCurrentFile().size)"></p>
+                        <p class="font-semibold text-[#242423]" x-text="getCurrentFile()?.name || ''"></p>
+                        <p class="text-sm text-gray-500" x-text="getCurrentFile() ? formatFileSize(getCurrentFile().size) : ''"></p>
                     </div>
                     <div class="flex space-x-2">
                         <button 
