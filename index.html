@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Meta tags and CSS links remain the same -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drpl V4</title>
+    <title>FileDrop</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
@@ -199,11 +198,11 @@
         <div class="absolute inset-0 bg-black bg-opacity-50"></div>
         
         <!-- Modal Content -->
-        <div class="relative bg-white rounded-lg max-w-sm w-full p-6">
+        <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
             <div class="text-center">
                 <i id="progress-icon" class="fas fa-spinner fa-spin text-4xl text-[#333533] mb-4"></i>
                 <h2 id="transfer-status" class="text-xl font-semibold text-[#242423] mb-2"></h2>
-                <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2 mb-4" style="display: none;">
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
                     <div id="progress-bar" class="bg-[#333533] h-2 rounded-full" style="width: 0%;"></div>
                 </div>
                 <p id="transfer-details" class="text-[#333533]"></p>
@@ -283,8 +282,7 @@
 
                 <!-- File Info & Controls -->
                 <div class="flex justify-between items-center">
-                    <!-- File name and size are hidden -->
-                    <div style="display: none;">
+                    <div>
                         <p id="current-file-name" class="font-semibold text-[#242423]"></p>
                         <p id="current-file-size" class="text-sm text-gray-500"></p>
                     </div>
