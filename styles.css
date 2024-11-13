@@ -1,0 +1,91 @@
+/* Wave Animation */
+.wave-container {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.wave {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-color: #333533;
+  opacity: 0.05;
+  border-radius: 40%;
+  transform-origin: 50% 48%;
+  animation: wave 12s infinite linear;
+  top: 0;
+  left: -50%;
+}
+
+.wave:nth-child(2) {
+  animation-duration: 16s;
+  opacity: 0.03;
+}
+
+.wave:nth-child(3) {
+  animation-duration: 20s;
+  opacity: 0.02;
+}
+
+@keyframes wave {
+  from {
+      transform: rotate(0deg);
+  }
+  to {
+      transform: rotate(360deg);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333533;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #242423;
+}
+
+/* Modal Transitions */
+#info-modal,
+#author-modal,
+#file-transfer-modal,
+#progress-modal,
+#incoming-request-modal,
+#file-preview-modal {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#info-modal[style*="display: flex"],
+#author-modal[style*="display: flex"],
+#file-transfer-modal[style*="display: flex"],
+#progress-modal[style*="display: flex"],
+#incoming-request-modal[style*="display: flex"],
+#file-preview-modal[style*="display: flex"] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+#info-modal[style*="display: none"],
+#author-modal[style*="display: none"],
+#file-transfer-modal[style*="display: none"],
+#progress-modal[style*="display: none"],
+#incoming-request-modal[style*="display: none"],
+#file-preview-modal[style*="display: none"] {
+  opacity: 0;
+  transform: scale(0.9);
+}
