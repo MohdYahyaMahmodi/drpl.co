@@ -1,16 +1,9 @@
-// app.js
+/*************************************************************
+ * Basic app.js to show device name & discovered peers
+ *************************************************************/
 
-// Helper for file size formatting
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-  
-  // Detect device type using userAgent heuristics
-  function detectDeviceType() {
+// Helper function: detect device type (still used to tell server about our device)
+function detectDeviceType() {
     const userAgent = navigator.userAgent.toLowerCase();
     if (/(iphone|ipod|android.*mobile|webos|blackberry)/.test(userAgent)) {
       return 'mobile';
@@ -23,545 +16,33 @@ function formatFileSize(bytes) {
     return 'desktop'; // Default fallback
   }
   
-  document.addEventListener('DOMContentLoaded', function() {
-    let peers = {};
-    let deviceType = detectDeviceType();
-    let selectedPeer = null;
-    let selectedFiles = [];
-    let isDragging = false;
-    let transferProgress = 0;
-    let transferStatus = '';
-    let transferDetails = '';
-    let isReceivingFile = false;
-    let receivingDetails = null;
-    let currentFileIndex = 0;
-    let receivedFiles = [];
-  
-    // Update device type on window resize
-    window.addEventListener('resize', function() {
-      deviceType = detectDeviceType();
-    });
-  
-    // Top buttons for Info and Author modals
-    document.getElementById('info-button').addEventListener('click', function() {
-      document.getElementById('info-modal').style.display = 'flex';
-    });
-  
-    document.getElementById('author-button').addEventListener('click', function() {
-      document.getElementById('author-modal').style.display = 'flex';
-    });
-  
-    // Close modals on "x" or backdrop
-    // Info Modal
-    document.getElementById('info-modal-close').addEventListener('click', function() {
-      document.getElementById('info-modal').style.display = 'none';
-    });
-    document.getElementById('info-modal-backdrop').addEventListener('click', function() {
-      document.getElementById('info-modal').style.display = 'none';
-    });
-  
-    // Author Modal
-    document.getElementById('author-modal-close').addEventListener('click', function() {
-      document.getElementById('author-modal').style.display = 'none';
-    });
-    document.getElementById('author-modal-backdrop').addEventListener('click', function() {
-      document.getElementById('author-modal').style.display = 'none';
-    });
-  
-    // Initialize the server connection and peers manager
-    const serverConnection = new ServerConnection(deviceType);
-    const peersManager = new PeersManager(serverConnection);
-  
-    // Update peer list in UI
-    function updatePeerList() {
-      const peerListElement = document.getElementById('peer-list');
-      const noPeersMessage = document.getElementById('no-peers-message');
-  
-      peerListElement.innerHTML = '';
-  
-      const peerIds = Object.keys(peers);
-      if (peerIds.length === 0) {
-        noPeersMessage.style.display = 'block';
-      } else {
-        noPeersMessage.style.display = 'none';
-  
-        peerIds.forEach(function(peerId) {
-          const peer = peers[peerId];
-          const button = document.createElement('button');
-          button.className =
-            'w-full px-6 py-4 bg-[#333533] text-white rounded-lg hover:bg-[#242423] transition-colors flex items-center justify-between';
-  
-          // Click event: open "Send Files" modal
-          button.addEventListener('click', function() {
-            selectPeer(peer);
-          });
-  
-          const innerDiv = document.createElement('div');
-          innerDiv.className = 'flex items-center space-x-4';
-  
-          const icon = document.createElement('i');
-          icon.className = 'text-2xl';
-  
-          // Show the appropriate icon based on device type
-          if (peer.name.type === 'mobile') {
-            icon.classList.add('fas', 'fa-mobile-alt');
-          } else if (peer.name.type === 'laptop') {
-            icon.classList.add('fas', 'fa-laptop');
-          } else if (peer.name.type === 'desktop') {
-            icon.classList.add('fas', 'fa-desktop');
-          } else if (peer.name.type === 'tablet') {
-            icon.classList.add('fas', 'fa-tablet-alt');
-          } else {
-            icon.classList.add('fas', 'fa-question-circle');
-          }
-  
-          const textDiv = document.createElement('div');
-          textDiv.className = 'text-left';
-  
-          const nameSpan = document.createElement('span');
-          nameSpan.className = 'block text-lg';
-          nameSpan.textContent = peer.name.displayName || 'Unknown';
-  
-          const idSpan = document.createElement('span');
-          idSpan.className = 'block text-sm opacity-75';
-          idSpan.textContent = peer.name.deviceName;
-  
-          textDiv.appendChild(nameSpan);
-          textDiv.appendChild(idSpan);
-  
-          innerDiv.appendChild(icon);
-          innerDiv.appendChild(textDiv);
-  
-          const chevronIcon = document.createElement('i');
-          chevronIcon.className = 'fas fa-chevron-right opacity-50';
-  
-          button.appendChild(innerDiv);
-          button.appendChild(chevronIcon);
-  
-          peerListElement.appendChild(button);
-        });
-      }
-    }
-  
-    function selectPeer(peer) {
-      selectedPeer = peer;
-      selectedFiles = [];
-      showFileTransferModal();
-    }
-  
-    function showFileTransferModal() {
-      document.getElementById('file-transfer-modal').style.display = 'flex';
-      document.getElementById('send-files-button').disabled = true;
-      document.getElementById('selected-files-container').style.display = 'none';
-      document.getElementById('selected-files-list').innerHTML = '';
-    }
-  
-    // File Transfer Modal events
-    document
-      .getElementById('file-transfer-modal-close')
-      .addEventListener('click', function() {
-        document.getElementById('file-transfer-modal').style.display = 'none';
-      });
-    document
-      .getElementById('file-transfer-modal-backdrop')
-      .addEventListener('click', function() {
-        document.getElementById('file-transfer-modal').style.display = 'none';
-      });
-    document
-      .getElementById('file-transfer-cancel-button')
-      .addEventListener('click', function() {
-        document.getElementById('file-transfer-modal').style.display = 'none';
-      });
-  
-    // File Drop Area
-    const fileDropArea = document.getElementById('file-drop-area');
-    fileDropArea.addEventListener('dragover', function(event) {
-      event.preventDefault();
-      isDragging = true;
-      fileDropArea.classList.add('bg-[#333533]', 'bg-opacity-5');
-    });
-  
-    fileDropArea.addEventListener('dragleave', function(event) {
-      event.preventDefault();
-      isDragging = false;
-      fileDropArea.classList.remove('bg-[#333533]', 'bg-opacity-5');
-    });
-  
-    fileDropArea.addEventListener('drop', function(event) {
-      event.preventDefault();
-      isDragging = false;
-      fileDropArea.classList.remove('bg-[#333533]', 'bg-opacity-5');
-      handleFileDrop(event);
-    });
-  
-    function handleFileDrop(event) {
-      selectedFiles = Array.from(event.dataTransfer.files);
-      updateSelectedFilesList();
-    }
-  
-    // File input (browse) event
-    document.getElementById('file-input').addEventListener('change', function(e) {
-      selectedFiles = Array.from(e.target.files);
-      updateSelectedFilesList();
-    });
-  
-    function updateSelectedFilesList() {
-      const selectedFilesContainer = document.getElementById('selected-files-container');
-      const selectedFilesList = document.getElementById('selected-files-list');
-      const sendFilesButton = document.getElementById('send-files-button');
-  
-      selectedFilesList.innerHTML = '';
-  
-      if (selectedFiles.length > 0) {
-        selectedFilesContainer.style.display = 'block';
-        sendFilesButton.disabled = false;
-  
-        selectedFiles.forEach(function(file, index) {
-          const li = document.createElement('li');
-          li.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-  
-          const nameSpan = document.createElement('span');
-          nameSpan.className = 'text-[#333533] truncate flex-1 mr-2';
-          nameSpan.textContent = file.name;
-  
-          const sizeSpan = document.createElement('span');
-          sizeSpan.className = 'text-[#333533] opacity-75';
-          sizeSpan.textContent = formatFileSize(file.size);
-  
-          const deleteButton = document.createElement('button');
-          deleteButton.className = 'text-red-500 hover:text-red-600 transition-colors';
-          deleteButton.innerHTML = '<i class="fas fa-trash-alt"></i>';
-          deleteButton.addEventListener('click', function() {
-            selectedFiles.splice(index, 1);
-            updateSelectedFilesList();
-          });
-  
-          const infoDiv = document.createElement('div');
-          infoDiv.className = 'flex items-center space-x-3';
-          infoDiv.appendChild(sizeSpan);
-          infoDiv.appendChild(deleteButton);
-  
-          li.appendChild(nameSpan);
-          li.appendChild(infoDiv);
-  
-          selectedFilesList.appendChild(li);
-        });
-      } else {
-        selectedFilesContainer.style.display = 'none';
-        sendFilesButton.disabled = true;
-      }
-    }
-  
-    // Send Files
-    document.getElementById('send-files-button').addEventListener('click', function() {
-      if (selectedFiles.length === 0) return;
-      document.getElementById('file-transfer-modal').style.display = 'none';
-      showProgressModal();
-      peersManager.sendFiles(selectedPeer.id, selectedFiles);
-    });
-  
-    function showProgressModal() {
-      document.getElementById('progress-modal').style.display = 'flex';
-      transferProgress = 0;
-      transferStatus = 'Initiating Transfer...';
-      transferDetails = 'Preparing files...';
-      updateProgressModal();
-    }
-  
-    function updateProgressModal() {
-      document.getElementById('transfer-status').textContent = transferStatus;
-      document.getElementById('transfer-details').textContent = transferDetails;
-      document.getElementById('progress-bar').style.width = transferProgress + '%';
-    }
-  
-    function hideProgressModal() {
-      document.getElementById('progress-modal').style.display = 'none';
-    }
-  
-    // Handle incoming file request
-    function handleIncomingTransfer(peerId, fileDetails) {
-      isReceivingFile = true;
-      receivingDetails = {
-        peer: peers[peerId],
-        fileCount: fileDetails.files.length,
-        totalSize: fileDetails.totalSize,
-        files: fileDetails.files
-      };
-      showIncomingRequestModal();
-    }
-  
-    function showIncomingRequestModal() {
-      document.getElementById('incoming-request-modal').style.display = 'flex';
-      document.getElementById('incoming-peer-id').textContent =
-        receivingDetails.peer.name.displayName;
-      document.getElementById('incoming-file-count').textContent =
-        receivingDetails.fileCount;
-      document.getElementById('incoming-total-size').textContent =
-        formatFileSize(receivingDetails.totalSize);
-    }
-  
-    document
-      .getElementById('accept-transfer-button')
-      .addEventListener('click', function() {
-        acceptTransfer();
-      });
-  
-    document
-      .getElementById('reject-transfer-button')
-      .addEventListener('click', function() {
-        rejectTransfer();
-      });
-  
-    document
-      .getElementById('incoming-request-modal-backdrop')
-      .addEventListener('click', function() {
-        rejectTransfer();
-      });
-  
-    function acceptTransfer() {
-      document.getElementById('incoming-request-modal').style.display = 'none';
-      showProgressModal();
-      transferStatus = 'Receiving Files...';
-      transferProgress = 0;
-      peersManager.acceptTransfer(receivingDetails.peer.id);
-    }
-  
-    function rejectTransfer() {
-      document.getElementById('incoming-request-modal').style.display = 'none';
-      isReceivingFile = false;
-      // If we have details of who tried sending
-      if (receivingDetails) {
-        peersManager.rejectTransfer(receivingDetails.peer.id);
-      }
-      receivingDetails = null;
-    }
-  
-    // Previewing Received Files
-    function isImageFile(file) {
-      return file?.type?.startsWith('image/');
-    }
-  
-    function showFilePreviewModal() {
-      document.getElementById('file-preview-modal').style.display = 'flex';
-      currentFileIndex = 0;
-      updateFilePreview();
-    }
-  
-    document
-      .getElementById('file-preview-modal-close')
-      .addEventListener('click', function() {
-        document.getElementById('file-preview-modal').style.display = 'none';
-      });
-    document
-      .getElementById('file-preview-modal-backdrop')
-      .addEventListener('click', function() {
-        document.getElementById('file-preview-modal').style.display = 'none';
-      });
-  
-    function updateFilePreview() {
-      const file = getCurrentFile();
-      const filePreviewContainer = document.getElementById('file-preview-container');
-      const currentFileName = document.getElementById('current-file-name');
-      const currentFileSize = document.getElementById('current-file-size');
-      const prevFileButton = document.getElementById('prev-file-button');
-      const nextFileButton = document.getElementById('next-file-button');
-      const filePagination = document.getElementById('file-pagination');
-  
-      filePreviewContainer.innerHTML = '';
-      currentFileName.textContent = file.name;
-      currentFileSize.textContent = formatFileSize(file.size);
-  
-      if (isImageFile(file)) {
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file.blob);
-        img.className = 'max-h-full max-w-full object-contain';
-        filePreviewContainer.appendChild(img);
-      } else {
-        const div = document.createElement('div');
-        div.className = 'text-center';
-  
-        const icon = document.createElement('i');
-        icon.className = getFileIcon(file);
-        icon.classList.add('text-6xl', 'text-[#333533]', 'mb-4');
-  
-        const nameP = document.createElement('p');
-        nameP.className = 'text-[#333533]';
-        nameP.textContent = file.name;
-  
-        const typeP = document.createElement('p');
-        typeP.className = 'text-sm text-gray-500';
-        typeP.textContent = file.type;
-  
-        div.appendChild(icon);
-        div.appendChild(nameP);
-        div.appendChild(typeP);
-        filePreviewContainer.appendChild(div);
-      }
-  
-      // Update navigation buttons
-      prevFileButton.style.display = currentFileIndex > 0 ? 'block' : 'none';
-      nextFileButton.style.display =
-        currentFileIndex < receivedFiles.length - 1 ? 'block' : 'none';
-  
-      // Update pagination
-      filePagination.innerHTML = '';
-      receivedFiles.forEach(function(_, index) {
-        const dot = document.createElement('button');
-        dot.className = 'w-2 h-2 rounded-full transition-colors';
-        if (currentFileIndex === index) {
-          dot.classList.add('bg-[#333533]');
-        } else {
-          dot.classList.add('bg-gray-300');
-        }
-        dot.addEventListener('click', function() {
-          currentFileIndex = index;
-          updateFilePreview();
-        });
-        filePagination.appendChild(dot);
-      });
-    }
-  
-    function getCurrentFile() {
-      return receivedFiles[currentFileIndex] || {};
-    }
-  
-    function getFileIcon(file) {
-      const type = file?.type || '';
-      if (type.startsWith('image/')) return 'fas fa-image';
-      if (type.startsWith('video/')) return 'fas fa-video';
-      if (type.startsWith('audio/')) return 'fas fa-music';
-      if (type.startsWith('text/')) return 'fas fa-file-alt';
-      if (type.includes('pdf')) return 'fas fa-file-pdf';
-      if (type.includes('word')) return 'fas fa-file-word';
-      if (type.includes('excel') || type.includes('spreadsheet'))
-        return 'fas fa-file-excel';
-      if (type.includes('zip') || type.includes('rar'))
-        return 'fas fa-file-archive';
-      if (type.includes('powerpoint') || type.includes('presentation'))
-        return 'fas fa-file-powerpoint';
-      return 'fas fa-file';
-    }
-  
-    document
-      .getElementById('prev-file-button')
-      .addEventListener('click', function() {
-        if (currentFileIndex > 0) {
-          currentFileIndex--;
-          updateFilePreview();
-        }
-      });
-  
-    document
-      .getElementById('next-file-button')
-      .addEventListener('click', function() {
-        if (currentFileIndex < receivedFiles.length - 1) {
-          currentFileIndex++;
-          updateFilePreview();
-        }
-      });
-  
-    document
-      .getElementById('download-file-button')
-      .addEventListener('click', function() {
-        downloadFile(getCurrentFile());
-      });
-  
-    function downloadFile(file) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(file.blob);
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  
-    // Listen for custom events to manage peers and file transfer progress
-    window.addEventListener('peers', function(e) {
-      const peerList = e.detail;
-      peers = {};
-      peerList.forEach(function(peer) {
-        if (peer.id !== serverConnection.id) {
-          peers[peer.id] = peer;
-        }
-      });
-      updatePeerList();
-    });
-  
-    window.addEventListener('peer-joined', function(e) {
-      const peer = e.detail;
-      if (peer.id !== serverConnection.id) {
-        peers[peer.id] = peer;
-        updatePeerList();
-      }
-    });
-  
-    window.addEventListener('peer-left', function(e) {
-      const peerId = e.detail;
-      delete peers[peerId];
-      updatePeerList();
-    });
-  
-    window.addEventListener('peer-updated', function(e) {
-      const updatedPeer = e.detail;
-      peers[updatedPeer.id] = updatedPeer;
-      updatePeerList();
-    });
-  
-    // File transfer progress
-    window.addEventListener('file-progress', function(e) {
-      const data = e.detail;
-      transferProgress = Math.round(data.progress * 100);
-      transferDetails = `${transferProgress}% complete`;
-      updateProgressModal();
-  
-      if (transferProgress >= 100) {
-        transferStatus = 'Transfer Complete!';
-        transferDetails = 'All files have been received successfully';
-        updateProgressModal();
-  
-        setTimeout(() => {
-          hideProgressModal();
-          // If files were received, show preview
-          if (isReceivingFile) {
-            isReceivingFile = false;
-            showFilePreviewModal();
-          }
-        }, 1500);
-      }
-    });
-  
-    // File fully received
-    window.addEventListener('file-received', function(e) {
-      const file = e.detail;
-      receivedFiles.push(file);
-    });
-  });
-  
-  // -------------------------------------
-  // Additional classes for WebRTC logic
-  // -------------------------------------
+  /*************************************************************
+   * Minimal "ServerConnection" class — only for receiving a name
+   * and notifying us about peers.
+   *************************************************************/
   class ServerConnection {
     constructor(deviceType) {
+      console.log('[ServerConnection] constructor called with deviceType:', deviceType);
       this.id = null;
       this.socket = null;
       this.deviceType = deviceType;
+      this.displayName = '';
       this.connect();
     }
   
     connect() {
-      // Attempt to connect to the same host via ws:// or wss://
       const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
       const endpoint = protocol + location.host;
+      console.log('[ServerConnection] Attempting to connect to:', endpoint);
+  
       this.socket = new WebSocket(endpoint);
   
       this.socket.onopen = () => {
-        console.log('Connected to signaling server');
+        console.log('[ServerConnection] WebSocket connected');
         // Introduce our device type to server
         this.send({
           type: 'introduce',
-          name: {
-            deviceType: this.deviceType
-          }
+          name: { deviceType: this.deviceType }
         });
       };
   
@@ -571,13 +52,12 @@ function formatFileSize(bytes) {
       };
   
       this.socket.onclose = () => {
-        console.log('Disconnected from signaling server');
-        // Reconnect after 3s
+        console.log('[ServerConnection] WebSocket closed. Reconnecting in 3s...');
         setTimeout(() => this.connect(), 3000);
       };
   
       this.socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[ServerConnection] WebSocket error:', error);
       };
     }
   
@@ -588,325 +68,153 @@ function formatFileSize(bytes) {
     }
   
     handleMessage(message) {
+      console.log('[ServerConnection] Received message:', message);
+  
       switch (message.type) {
-        case 'display-name':
+        case 'display-name': {
+          // The server gives us an ID and display name
           this.id = message.message.peerId;
           this.displayName = message.message.displayName;
-          this.deviceName = message.message.deviceName;
-          // Show the displayName in the UI (bottom text)
-          document.getElementById('device-name').textContent = this.displayName;
+  
+          // Update the UI so the user sees their generated name
+          const deviceNameElem = document.getElementById('device-name');
+          if (deviceNameElem) {
+            deviceNameElem.textContent = this.displayName;
+          }
           break;
-        case 'peers':
+        }
+  
+        case 'peers': {
+          // Full list of peers
           window.dispatchEvent(new CustomEvent('peers', { detail: message.peers }));
           break;
-        case 'peer-joined':
+        }
+  
+        case 'peer-joined': {
+          // A new peer has joined
           window.dispatchEvent(new CustomEvent('peer-joined', { detail: message.peer }));
           break;
-        case 'peer-left':
+        }
+  
+        case 'peer-left': {
+          // A peer left
           window.dispatchEvent(new CustomEvent('peer-left', { detail: message.peerId }));
           break;
-        case 'peer-updated':
+        }
+  
+        case 'peer-updated': {
+          // A peer updated (maybe changed device type)
           window.dispatchEvent(new CustomEvent('peer-updated', { detail: message.peer }));
           break;
-        case 'signal':
-          window.dispatchEvent(new CustomEvent('signal', { detail: message }));
-          break;
-        case 'ping':
+        }
+  
+        case 'ping': {
+          // Basic keep-alive
           this.send({ type: 'pong' });
           break;
+        }
+  
         default:
-          console.log('Unknown message type:', message.type);
-          break;
+          console.log('[ServerConnection] Unknown message type:', message.type);
       }
     }
   }
   
-  class PeersManager {
-    constructor(serverConnection) {
-      this.serverConnection = serverConnection;
-      this.peers = {};
-      window.addEventListener('signal', (e) => this.handleSignal(e.detail));
-      window.addEventListener('peer-left', (e) => this.handlePeerLeft(e.detail));
-    }
+  /*************************************************************
+   * Minimal DOM logic — just keep track of peers and show them
+   *************************************************************/
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[app.js] DOMContentLoaded');
+    let peers = {};
   
-    handleSignal(message) {
-      const fromPeerId = message.sender;
-      const peer = this.getOrCreatePeer(fromPeerId, false);
+    // Create a new server connection
+    const deviceType = detectDeviceType();
+    console.log('[app.js] Detected deviceType:', deviceType);
+    const serverConnection = new ServerConnection(deviceType);
   
-      if (message.sdp) {
-        peer.setRemoteDescription(message.sdp);
-      } else if (message.ice) {
-        peer.addIceCandidate(message.ice);
+    // Grab references for UI elements
+    const peerListElement = document.getElementById('peer-list');
+    const noPeersMessage = document.getElementById('no-peers-message');
+  
+    // Simple function to update the peer list
+    function updatePeerList() {
+      console.log('[updatePeerList] Called with peers:', peers);
+  
+      // Clear existing buttons
+      peerListElement.innerHTML = '';
+  
+      const peerIds = Object.keys(peers);
+      if (peerIds.length === 0) {
+        noPeersMessage.style.display = 'block';
+      } else {
+        noPeersMessage.style.display = 'none';
+        // Create a button for each peer
+        peerIds.forEach((pid) => {
+          const peer = peers[pid];
+          // Make a simple button with the peer's displayName
+          const btn = document.createElement('button');
+          btn.className = 'w-full px-6 py-4 bg-[#333533] text-white rounded-lg hover:bg-[#242423] transition-colors';
+          btn.style.marginTop = '8px';
+  
+          // The button text can be the peer's displayName
+          btn.textContent = peer.name.displayName + ' (' + (peer.name.type || 'desktop') + ')';
+  
+          // For now, no click action needed
+          btn.addEventListener('click', () => {
+            console.log('[updatePeerList] Clicked peer button:', peer);
+            alert('Clicked peer: ' + peer.name.displayName);
+          });
+  
+          peerListElement.appendChild(btn);
+        });
       }
     }
   
-    handlePeerLeft(peerId) {
-      if (this.peers[peerId]) {
-        this.peers[peerId].close();
-        delete this.peers[peerId];
-      }
-    }
+    /***********************************************************
+     * Listen for custom events from the server
+     ***********************************************************/
   
-    getOrCreatePeer(peerId, isInitiator = false) {
-      if (!this.peers[peerId]) {
-        this.peers[peerId] = new RTCPeer(this.serverConnection, peerId, isInitiator);
-      }
-      return this.peers[peerId];
-    }
-  
-    sendFiles(peerId, files) {
-      const peer = this.getOrCreatePeer(peerId, true);
-      peer.sendFiles(files);
-    }
-  
-    acceptTransfer(peerId) {
-      const peer = this.getOrCreatePeer(peerId);
-      peer.acceptTransfer();
-    }
-  
-    rejectTransfer(peerId) {
-      const peer = this.getOrCreatePeer(peerId);
-      peer.rejectTransfer();
-    }
-  }
-  
-  class RTCPeer {
-    constructor(serverConnection, peerId, isInitiator) {
-      this.serverConnection = serverConnection;
-      this.peerId = peerId;
-      this.isInitiator = isInitiator;
-      this.pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    // Initially we might get a full list of peers
+    window.addEventListener('peers', (e) => {
+      console.log('[event:peers] Received full peer list:', e.detail);
+      // Build the local peers object
+      peers = {};
+      e.detail.forEach((p) => {
+        if (p.id !== serverConnection.id) {
+          peers[p.id] = p;
+        }
       });
-      this.channel = null;
-      this.fileReceiver = null;
-      this.fileSender = null;
+      updatePeerList();
+    });
   
-      this.pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          this.serverConnection.send({
-            type: 'signal',
-            to: this.peerId,
-            ice: event.candidate
-          });
-        }
-      };
-  
-      this.pc.ondatachannel = (event) => {
-        this.channel = event.channel;
-        this.setupDataChannel();
-      };
-  
-      if (this.isInitiator) {
-        this.channel = this.pc.createDataChannel('fileTransfer');
-        this.setupDataChannel();
-        this.createOffer();
+    // If a new peer joins
+    window.addEventListener('peer-joined', (e) => {
+      const newPeer = e.detail;
+      console.log('[event:peer-joined] Peer joined:', newPeer);
+      if (newPeer.id !== serverConnection.id) {
+        peers[newPeer.id] = newPeer;
+        updatePeerList();
       }
-    }
+    });
   
-    createOffer() {
-      this.pc
-        .createOffer()
-        .then((offer) => this.pc.setLocalDescription(offer))
-        .then(() => {
-          this.serverConnection.send({
-            type: 'signal',
-            to: this.peerId,
-            sdp: this.pc.localDescription
-          });
-        })
-        .catch(console.error);
-    }
-  
-    setRemoteDescription(sdp) {
-      this.pc
-        .setRemoteDescription(new RTCSessionDescription(sdp))
-        .then(() => {
-          if (sdp.type === 'offer') {
-            return this.pc
-              .createAnswer()
-              .then((answer) => this.pc.setLocalDescription(answer))
-              .then(() => {
-                this.serverConnection.send({
-                  type: 'signal',
-                  to: this.peerId,
-                  sdp: this.pc.localDescription
-                });
-              });
-          }
-        })
-        .catch(console.error);
-    }
-  
-    addIceCandidate(candidate) {
-      this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
-    }
-  
-    setupDataChannel() {
-      this.channel.onopen = () => {
-        console.log('Data channel opened with', this.peerId);
-        if (this.fileSender && this.fileSender.hasFiles()) {
-          this.fileSender.sendNextFile();
-        }
-      };
-  
-      this.channel.onmessage = (event) => {
-        this.handleMessage(event.data);
-      };
-  
-      this.channel.onerror = (error) => {
-        console.error('Data channel error:', error);
-      };
-  
-      this.channel.onclose = () => {
-        console.log('Data channel closed with', this.peerId);
-      };
-    }
-  
-    handleMessage(message) {
-      // If we receive JSON text
-      if (typeof message === 'string') {
-        try {
-          const data = JSON.parse(message);
-          if (data.type === 'file-header') {
-            // Start receiving
-            this.fileReceiver = new FileReceiver(data.fileInfo, this.channel);
-          } else if (data.type === 'transfer-complete') {
-            // One file is done
-            window.dispatchEvent(
-              new CustomEvent('file-received', {
-                detail: this.fileReceiver.file
-              })
-            );
-          }
-        } catch (err) {
-          console.error('Unable to parse message', err);
-        }
-      } else {
-        // Binary data (file chunks)
-        if (this.fileReceiver) {
-          this.fileReceiver.receiveChunk(message);
-          const progress = this.fileReceiver.getProgress();
-          window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress } }));
-        }
+    // If a peer leaves
+    window.addEventListener('peer-left', (e) => {
+      const peerId = e.detail;
+      console.log('[event:peer-left] Peer left with ID:', peerId);
+      if (peers[peerId]) {
+        delete peers[peerId];
+        updatePeerList();
       }
-    }
+    });
   
-    sendFiles(files) {
-      this.fileSender = new FileSender(files, this.channel);
-      if (this.channel && this.channel.readyState === 'open') {
-        this.fileSender.sendNextFile();
-      } else {
-        this.channel.onopen = () => {
-          this.fileSender.sendNextFile();
-        };
-      }
-    }
+    // If a peer updates
+    window.addEventListener('peer-updated', (e) => {
+      const updatedPeer = e.detail;
+      console.log('[event:peer-updated] Updated peer:', updatedPeer);
+      peers[updatedPeer.id] = updatedPeer;
+      updatePeerList();
+    });
   
-    acceptTransfer() {
-      // If you need to send anything special upon acceptance, do so here
-      // (This example doesn’t require an extra signal to start receiving.)
-    }
-  
-    rejectTransfer() {
-      // If you want to notify the sender that the transfer is rejected, do it here
-      // (This example doesn’t explicitly handle a “rejected” event.)
-    }
-  
-    close() {
-      if (this.channel) {
-        this.channel.close();
-      }
-      if (this.pc) {
-        this.pc.close();
-      }
-    }
-  }
-  
-  class FileSender {
-    constructor(files, channel) {
-      this.files = files;
-      this.channel = channel;
-      this.fileIndex = 0;
-      this.chunkSize = 16 * 1024; // 16 KB
-    }
-  
-    hasFiles() {
-      return this.files && this.fileIndex < this.files.length;
-    }
-  
-    sendNextFile() {
-      if (this.fileIndex >= this.files.length) return;
-  
-      const file = this.files[this.fileIndex];
-      const fileInfo = {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      };
-      // Send file header
-      this.channel.send(JSON.stringify({ type: 'file-header', fileInfo }));
-  
-      // Send file in chunks
-      this.sendFileChunks(file);
-    }
-  
-    sendFileChunks(file) {
-      const reader = new FileReader();
-      let offset = 0;
-  
-      const readSlice = () => {
-        const slice = file.slice(offset, offset + this.chunkSize);
-        reader.readAsArrayBuffer(slice);
-      };
-  
-      reader.onload = (event) => {
-        this.channel.send(event.target.result);
-        offset += event.target.result.byteLength;
-  
-        const progress = offset / file.size;
-        window.dispatchEvent(new CustomEvent('file-progress', { detail: { progress } }));
-  
-        if (offset < file.size) {
-          readSlice();
-        } else {
-          // Done with this file
-          this.channel.send(JSON.stringify({ type: 'transfer-complete' }));
-          this.fileIndex++;
-          // Send next if available
-          this.sendNextFile();
-        }
-      };
-  
-      readSlice();
-    }
-  }
-  
-  class FileReceiver {
-    constructor(fileInfo, channel) {
-      this.fileInfo = fileInfo;
-      this.channel = channel;
-      this.receivedBuffers = [];
-      this.receivedSize = 0;
-    }
-  
-    receiveChunk(chunk) {
-      this.receivedBuffers.push(chunk);
-      this.receivedSize += chunk.byteLength;
-    }
-  
-    getProgress() {
-      return this.receivedSize / this.fileInfo.size;
-    }
-  
-    get file() {
-      const blob = new Blob(this.receivedBuffers, { type: this.fileInfo.type });
-      return {
-        name: this.fileInfo.name,
-        size: this.fileInfo.size,
-        type: this.fileInfo.type,
-        blob: blob
-      };
-    }
-  }
+    // Done. The rest of the code from the old version (file transfers, etc.) is omitted.
+  });
   
