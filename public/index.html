@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drpl.co V2</title>
+  <title>Drpl.co | Transfer Files</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache-busting) -->
-  <link rel="stylesheet" href="styles.css?v=3.0.1" />
+  <link rel="stylesheet" href="styles.css?v=4.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -431,7 +431,59 @@
     </div>
   </div>
 
+  <!-- NEW: Peer/Connection Lost Modal -->
+  <div
+    id="peer-lost-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="peer-lost-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Connection Lost
+      </h2>
+      <p class="text-[#333533] opacity-75 mb-4" id="peer-lost-text">
+        The other device has disconnected.
+      </p>
+      <button
+        id="peer-lost-close"
+        class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
+  <!-- NEW: Server Disconnected Modal -->
+  <div
+    id="server-disconnected-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="server-disconnected-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Server Disconnected
+      </h2>
+      <p class="text-[#333533] opacity-75 mb-4">
+        The server connection has been lost. Please refresh or try again later.
+      </p>
+      <button
+        id="server-disconnected-close"
+        class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
   <!-- Main JS -->
-  <script src="main.js?v=3.0.1"></script>
+  <script src="main.js?v=4.0.0"></script>
 </body>
 </html>

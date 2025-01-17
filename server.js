@@ -1,13 +1,13 @@
 import process from 'process';
 import express from 'express';
 import http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import parser from 'ua-parser-js';
 
 /*************************************************************
  * server.js
  *  - Maintains peer discovery in "rooms" by IP
- *  - Relays messages between peers
+ *  - Relays messages (transfer-request, transfer-cancel, etc.)
  *  - Generates a random display name from ID
  *************************************************************/
 
@@ -25,7 +25,6 @@ const nounsList = [
   'Griffin', 'Octopus'
 ];
 
-// Helper function: generate displayName from peer ID
 function getDisplayName(id) {
   const hash1 = (id + 'adjective').hashCode();
   const hash2 = (id + 'noun').hashCode();
@@ -47,7 +46,6 @@ Object.defineProperty(String.prototype, 'hashCode', {
   }
 });
 
-// Graceful shutdown
 process.on('SIGINT', () => {
   console.info('SIGINT Received, exiting...');
   process.exit(0);
@@ -57,11 +55,9 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// Express setup
 const app = express();
-app.use(express.static('public')); // static files in /public
+app.use(express.static('public')); // Serve static files
 
-// HTTP + WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -97,7 +93,7 @@ class FileDropServer {
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // Immediately tell them their displayName
+    // Send displayName
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -120,7 +116,6 @@ class FileDropServer {
 
     switch (msg.type) {
       case 'introduce':
-        // The client told us its device type
         sender.name.type = msg.name.deviceType;
         this._notifyPeersAboutUpdate(sender);
         this._sendPeersList(sender);
@@ -158,10 +153,7 @@ class FileDropServer {
         peer: peer.getInfo()
       });
     }
-    // Send peers to newly joined
     this._sendPeersList(peer);
-
-    // Add to the room
     this._rooms[peer.ip][peer.id] = peer;
   }
 
@@ -190,10 +182,7 @@ class FileDropServer {
     if (!room) return;
     for (const pid in room) {
       if (pid !== peer.id) {
-        this._send(room[pid], {
-          type: 'peer-updated',
-          peer: peer.getInfo()
-        });
+        this._send(room[pid], { type: 'peer-updated', peer: peer.getInfo() });
       }
     }
   }
@@ -233,7 +222,7 @@ class FileDropServer {
   }
 
   _send(peer, msg) {
-    if (peer.socket.readyState === WebSocket.OPEN) {
+    if (peer.socket.readyState === 1) {
       peer.socket.send(JSON.stringify(msg));
     }
   }
@@ -326,7 +315,6 @@ class Peer {
   }
 }
 
-// Start the server
 const port = process.env.PORT || 3002;
 server.listen(port, () => {
   console.log(`Server listening on port ${port}`);

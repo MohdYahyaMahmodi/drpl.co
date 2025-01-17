@@ -1,7 +1,8 @@
 /*************************************************************
  * main.js
- * Shows a "transfer complete" or "transfer error" modal 
- * on the sending device after the receiver acknowledges.
+ * 1) Adds a "transfer-cancel" message for real-time cancel
+ * 2) Closes modals if peer leaves or if server disconnects
+ * 3) Ensures no overlapping modals
  *************************************************************/
 
 function detectDeviceType() {
@@ -18,7 +19,6 @@ function detectDeviceType() {
 
 class ServerConnection {
   constructor(deviceType) {
-    console.log('[ServerConnection] constructor with deviceType:', deviceType);
     this.id = null;
     this.socket = null;
     this.deviceType = deviceType;
@@ -35,10 +35,7 @@ class ServerConnection {
 
     this.socket.onopen = () => {
       console.log('[ServerConnection] WebSocket open');
-      this.send({
-        type: 'introduce',
-        name: { deviceType: this.deviceType }
-      });
+      this.send({ type: 'introduce', name: { deviceType: this.deviceType } });
     };
 
     this.socket.onmessage = (message) => {
@@ -47,8 +44,12 @@ class ServerConnection {
     };
 
     this.socket.onclose = () => {
-      console.log('[ServerConnection] WebSocket closed; reconnect in 3s');
-      setTimeout(() => this.connect(), 3000);
+      console.log('[ServerConnection] WebSocket closed');
+      // Show "Server Disconnected" modal
+      const serverModal = document.getElementById('server-disconnected-modal');
+      if (serverModal) {
+        serverModal.style.display = 'flex';
+      }
     };
 
     this.socket.onerror = (err) => {
@@ -101,12 +102,12 @@ class ServerConnection {
       case 'transfer-decline':
         window.dispatchEvent(new CustomEvent('transfer-decline', { detail: msg }));
         break;
+      case 'transfer-cancel':
+        window.dispatchEvent(new CustomEvent('transfer-cancel', { detail: msg }));
+        break;
       case 'send-message':
-        // A message is being delivered
         window.dispatchEvent(new CustomEvent('incoming-message', { detail: msg }));
         break;
-
-      // NEW: Transfer complete or error
       case 'transfer-complete':
         window.dispatchEvent(new CustomEvent('transfer-complete', { detail: msg }));
         break;
@@ -121,25 +122,25 @@ class ServerConnection {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[main.js] DOMContentLoaded');
   let peers = {};
+  let currentRecipientId = null;
+  let currentRequesterId = null;
+  let currentMode = null; // "files" or "message"
+  const autoAcceptMap = {};
 
-  // Connection
   const deviceType = detectDeviceType();
   const serverConnection = new ServerConnection(deviceType);
 
-  // Peer list
+  // -- Grab references to modals/elements --
   const peerListElement = document.getElementById('peer-list');
   const noPeersMessage = document.getElementById('no-peers-message');
 
-  // Choose Action
   const chooseActionModal = document.getElementById('choose-action-modal');
   const chooseActionBackdrop = document.getElementById('choose-action-backdrop');
   const chooseActionDeviceName = document.getElementById('choose-action-device-name');
   const chooseActionSendFilesBtn = document.getElementById('choose-action-send-files');
   const chooseActionSendMessageBtn = document.getElementById('choose-action-send-message');
 
-  // Incoming Request
   const incomingRequestModal = document.getElementById('incoming-request-modal');
   const incomingBackdrop = document.getElementById('incoming-request-backdrop');
   const incomingRequestText = document.getElementById('incoming-request-text');
@@ -147,25 +148,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const incomingAcceptBtn = document.getElementById('incoming-accept-button');
   const alwaysAcceptCheckbox = document.getElementById('always-accept-checkbox');
 
-  // Waiting for Response (sender side)
   const waitingResponseModal = document.getElementById('waiting-response-modal');
   const waitingResponseBackdrop = document.getElementById('waiting-response-backdrop');
   const waitingResponseText = document.getElementById('waiting-response-text');
   const waitingCancelBtn = document.getElementById('waiting-cancel-button');
 
-  // Receiving Status (receiver side)
   const receivingStatusModal = document.getElementById('receiving-status-modal');
   const receivingStatusBackdrop = document.getElementById('receiving-status-backdrop');
   const receivingStatusText = document.getElementById('receiving-status-text');
 
-  // Send Message (sender side)
   const sendMessageModal = document.getElementById('send-message-modal');
   const sendMessageBackdrop = document.getElementById('send-message-backdrop');
   const sendMessageCancel = document.getElementById('send-message-cancel');
   const sendMessageBtn = document.getElementById('send-message-button');
   const messageInput = document.getElementById('message-input');
 
-  // Incoming Message (receiver side)
   const incomingMessageModal = document.getElementById('incoming-message-modal');
   const incomingMessageBackdrop = document.getElementById('incoming-message-backdrop');
   const incomingMessageHeader = document.getElementById('incoming-message-header');
@@ -173,14 +170,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const incomingMessageClose = document.getElementById('incoming-message-close');
   const incomingMessageRespond = document.getElementById('incoming-message-respond');
 
-  // Transfer Complete Modal (sender side)
   const transferCompleteModal = document.getElementById('transfer-complete-modal');
   const transferCompleteBackdrop = document.getElementById('transfer-complete-backdrop');
   const transferCompleteTitle = document.getElementById('transfer-complete-title');
   const transferCompleteText = document.getElementById('transfer-complete-text');
   const transferCompleteClose = document.getElementById('transfer-complete-close');
 
-  // Info & Author
+  const peerLostModal = document.getElementById('peer-lost-modal');
+  const peerLostBackdrop = document.getElementById('peer-lost-backdrop');
+  const peerLostClose = document.getElementById('peer-lost-close');
+
+  const serverDisconnectedModal = document.getElementById('server-disconnected-modal');
+  const serverDisconnectedClose = document.getElementById('server-disconnected-close');
+
+  // Info & Author modals
   const infoButton = document.getElementById('info-button');
   const authorButton = document.getElementById('author-button');
   const infoModal = document.getElementById('info-modal');
@@ -190,15 +193,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const authorModalClose = document.getElementById('author-modal-close');
   const authorModalBackdrop = document.getElementById('author-modal-backdrop');
 
-  // Variables
-  let currentRecipientId = null;
-  let currentRequesterId = null;
-  let currentMode = null; // "files" or "message"
-  const autoAcceptMap = {};
+  // --- Utility to close all modals if needed ---
+  function closeAllModals() {
+    [
+      chooseActionModal, 
+      incomingRequestModal, 
+      waitingResponseModal, 
+      receivingStatusModal, 
+      sendMessageModal, 
+      incomingMessageModal, 
+      transferCompleteModal
+    ].forEach(m => m.style.display = 'none');
+  }
 
-  /***********************************************************
-   * Update Peer List
-   **********************************************************/
+  // --- Update Peer List ---
   function updatePeerList() {
     peerListElement.innerHTML = '';
     const peerIds = Object.keys(peers);
@@ -207,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
       noPeersMessage.style.display = 'block';
     } else {
       noPeersMessage.style.display = 'none';
-      peerIds.forEach((pid) => {
+      peerIds.forEach(pid => {
         const peer = peers[pid];
         const btn = document.createElement('button');
         btn.className = 'peer-button w-full py-[15px] text-xl bg-[#333533] text-white rounded-lg hover:bg-[#242423] transition-colors';
@@ -221,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.appendChild(textSpan);
 
         btn.addEventListener('click', () => {
-          console.log('[UI] clicked peer => open Choose Action modal:', peer.name.displayName);
           currentRecipientId = peer.id;
           chooseActionDeviceName.textContent = `Send to ${peer.name.displayName}`;
           chooseActionModal.style.display = 'flex';
@@ -243,11 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /***********************************************************
-   * Server Event Listeners
+   * SERVER EVENT HANDLERS
    **********************************************************/
-  window.addEventListener('peers', (e) => {
+  window.addEventListener('peers', e => {
     peers = {};
-    e.detail.forEach((p) => {
+    e.detail.forEach(p => {
       if (p.id !== serverConnection.id) {
         peers[p.id] = p;
       }
@@ -255,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePeerList();
   });
 
-  window.addEventListener('peer-joined', (e) => {
+  window.addEventListener('peer-joined', e => {
     const newPeer = e.detail;
     if (newPeer.id !== serverConnection.id) {
       peers[newPeer.id] = newPeer;
@@ -263,22 +270,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  window.addEventListener('peer-left', (e) => {
+  window.addEventListener('peer-left', e => {
     const peerId = e.detail;
     if (peers[peerId]) {
       delete peers[peerId];
       updatePeerList();
     }
+    // If we are in the middle of a flow with that peer, close everything and show "Peer Lost"
+    if (peerId === currentRecipientId || peerId === currentRequesterId) {
+      closeAllModals();
+      peerLostModal.style.display = 'flex';
+      currentRecipientId = null;
+      currentRequesterId = null;
+      currentMode = null;
+    }
   });
 
-  window.addEventListener('peer-updated', (e) => {
+  window.addEventListener('peer-updated', e => {
     const updatedPeer = e.detail;
     peers[updatedPeer.id] = updatedPeer;
     updatePeerList();
   });
 
   /***********************************************************
-   * Transfer Request Flow
+   * TRANSFER FLOW
    **********************************************************/
   function sendTransferRequest(mode) {
     if (!currentRecipientId) return;
@@ -296,13 +311,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  window.addEventListener('transfer-request', (e) => {
+  // On receiving side
+  window.addEventListener('transfer-request', e => {
     const msg = e.detail;
-    console.log('[transfer-request] from', msg.sender, 'mode=', msg.mode);
-
-    currentRequesterId = msg.sender;
-    currentMode = msg.mode; 
     const fromName = msg.fromDisplayName || 'Unknown';
+    currentRequesterId = msg.sender;
+    currentMode = msg.mode;
+
+    // If we already have a flow, let's close out everything
+    closeAllModals();
 
     if (autoAcceptMap[currentRequesterId]) {
       // auto-accept
@@ -311,39 +328,34 @@ document.addEventListener('DOMContentLoaded', () => {
         to: currentRequesterId,
         mode: currentMode
       });
-      // Show receiving status immediately
       showReceivingStatus(fromName, currentMode);
       return;
     }
 
-    // Otherwise prompt user
-    incomingRequestText.textContent = `${fromName} wants to send ${currentMode === 'files' ? 'files' : 'a message'}.`;
+    incomingRequestText.textContent = `${fromName} wants to send ${
+      currentMode === 'files' ? 'files' : 'a message'
+    }.`;
     incomingRequestModal.style.display = 'flex';
     alwaysAcceptCheckbox.checked = false;
   });
 
+  // On the receiving side => user clicks decline
   incomingDeclineBtn.addEventListener('click', () => {
     if (currentRequesterId) {
-      serverConnection.send({
-        type: 'transfer-decline',
-        to: currentRequesterId
-      });
+      serverConnection.send({ type: 'transfer-decline', to: currentRequesterId });
     }
     incomingRequestModal.style.display = 'none';
     currentRequesterId = null;
     currentMode = null;
   });
 
+  // On the receiving side => user clicks accept
   incomingAcceptBtn.addEventListener('click', () => {
     if (currentRequesterId) {
       if (alwaysAcceptCheckbox.checked) {
         autoAcceptMap[currentRequesterId] = true;
       }
-      serverConnection.send({
-        type: 'transfer-accept',
-        to: currentRequesterId,
-        mode: currentMode
-      });
+      serverConnection.send({ type: 'transfer-accept', to: currentRequesterId, mode: currentMode });
 
       const fromName = peers[currentRequesterId]?.name?.displayName || 'Unknown';
       showReceivingStatus(fromName, currentMode);
@@ -352,91 +364,104 @@ document.addEventListener('DOMContentLoaded', () => {
     currentRequesterId = null;
   });
 
-  window.addEventListener('transfer-accept', (e) => {
+  // On the sender side => sees accept
+  window.addEventListener('transfer-accept', e => {
     const msg = e.detail;
-    console.log('[transfer-accept] from', msg.sender, 'mode=', msg.mode);
     waitingResponseModal.style.display = 'none';
-
     if (msg.mode === 'files') {
-      // Not yet implemented
-      // Show your "choose file" UI or just show an alert
       alert('They accepted file transfer! (Not implemented yet.)');
     } else if (msg.mode === 'message') {
       sendMessageModal.style.display = 'flex';
     }
   });
 
-  window.addEventListener('transfer-decline', (e) => {
-    const msg = e.detail;
-    console.log('[transfer-decline] from', msg.sender);
+  // On the sender side => sees decline
+  window.addEventListener('transfer-decline', e => {
     waitingResponseModal.style.display = 'none';
     alert('They declined the transfer.');
     currentRecipientId = null;
     currentMode = null;
   });
 
+  // On either side => sees "transfer-cancel"
+  window.addEventListener('transfer-cancel', e => {
+    const msg = e.detail;
+    // If the other side canceled, we close any "waiting" or "receiving" modals
+    closeAllModals();
+    // Optionally show a small message or alert
+    alert('The other device canceled the transfer.');
+    currentRecipientId = null;
+    currentRequesterId = null;
+    currentMode = null;
+  });
+
+  // CANCEL FROM SENDER => send "transfer-cancel" to the peer
+  function cancelSenderFlow() {
+    if (currentRecipientId) {
+      serverConnection.send({ type: 'transfer-cancel', to: currentRecipientId });
+    }
+    closeAllModals();
+    currentRecipientId = null;
+    currentMode = null;
+  }
+
+  // CANCEL FROM RECEIVER => we could do similarly if the receiver changes its mind mid-flow
+
   /***********************************************************
-   * Receiving Status (receiver side)
+   * "Receiving Status" (Receiver side)
    **********************************************************/
   function showReceivingStatus(senderName, mode) {
-    const typeLabel = (mode === 'files') ? 'files' : 'a message';
-    receivingStatusText.textContent = `Waiting for ${senderName} to send ${typeLabel}...`;
+    receivingStatusText.textContent = `Waiting for ${senderName} to send ${
+      mode === 'files' ? 'files' : 'a message'
+    }...`;
     receivingStatusModal.style.display = 'flex';
   }
   function hideReceivingStatus() {
     receivingStatusModal.style.display = 'none';
   }
 
-  receivingStatusBackdrop.addEventListener('click', () => {
-    // If you want, handle a "Cancel receiving" action here.
-  });
-
   /***********************************************************
-   * Send Message Flow (sender side)
+   * SEND MESSAGE FLOW (sender side)
    **********************************************************/
   sendMessageBtn.addEventListener('click', () => {
     if (!currentRecipientId) return;
     const text = messageInput.value.trim();
-    if (!text) return;
-
+    if (!text) {
+      // No text => optional: do nothing or auto-cancel
+      return;
+    }
     serverConnection.send({
       type: 'send-message',
       to: currentRecipientId,
       text,
       fromName: serverConnection.displayName
     });
-
     sendMessageModal.style.display = 'none';
     messageInput.value = '';
-    currentRecipientId = null;
-    currentMode = null;
+    // We remain in a state until the receiver acknowledges
+    // but we do not strictly need to wait. We'll just let them respond with "transfer-complete"
   });
 
   sendMessageCancel.addEventListener('click', () => {
-    sendMessageModal.style.display = 'none';
+    // CANCEL => tell the receiver
+    cancelSenderFlow();
     messageInput.value = '';
-    currentRecipientId = null;
-    currentMode = null;
   });
 
   /***********************************************************
-   * Incoming Message (receiver side)
+   * INCOMING MESSAGE (receiver side)
    **********************************************************/
-  window.addEventListener('incoming-message', (e) => {
-    const msg = e.detail;
-    console.log('[incoming-message] from', msg.sender, 'text=', msg.text);
-
-    // Hide receiving status if open
+  window.addEventListener('incoming-message', e => {
     hideReceivingStatus();
 
-    // Show the message
+    const msg = e.detail;
     const fromName = msg.fromName || 'Unknown';
     incomingMessageHeader.textContent = `Message from ${fromName}`;
     incomingMessageText.textContent = msg.text || '';
     currentRequesterId = msg.sender;
     incomingMessageModal.style.display = 'flex';
 
-    // **Send back "transfer-complete"** so the sender can show a success modal
+    // Acknowledge => "transfer-complete"
     serverConnection.send({
       type: 'transfer-complete',
       to: msg.sender,
@@ -451,48 +476,43 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   incomingMessageRespond.addEventListener('click', () => {
-    // We'll respond back to the same peer
     currentRecipientId = currentRequesterId;
     currentRequesterId = null;
-
     incomingMessageModal.style.display = 'none';
     sendMessageModal.style.display = 'flex';
   });
 
   /***********************************************************
-   * Transfer Complete (sender side)
+   * TRANSFER COMPLETE (sender side)
    **********************************************************/
-  window.addEventListener('transfer-complete', (e) => {
+  window.addEventListener('transfer-complete', e => {
     const msg = e.detail;
-    console.log('[transfer-complete] from', msg.sender, 'status=', msg.status);
-
-    // Show the "Transfer Complete" modal
     transferCompleteTitle.textContent = 'Transfer Complete';
     const fromName = msg.fromName || 'the receiver';
     transferCompleteText.textContent = `Your message has been delivered to ${fromName}.`;
     transferCompleteModal.style.display = 'flex';
   });
 
-  window.addEventListener('transfer-error', (e) => {
+  window.addEventListener('transfer-error', e => {
     const msg = e.detail;
-    console.log('[transfer-error] from', msg.sender, 'reason=', msg.reason);
-
-    // Show the "Transfer Error" modal
     transferCompleteTitle.textContent = 'Transfer Error';
     const fromName = msg.fromName || 'the receiver';
     transferCompleteText.textContent = `There was an error sending to ${fromName}. Please try again.`;
     transferCompleteModal.style.display = 'flex';
   });
 
-  transferCompleteBackdrop.addEventListener('click', () => {
-    transferCompleteModal.style.display = 'none';
+  /***********************************************************
+   * CANCEL FROM WAITING / SENDER
+   **********************************************************/
+  waitingResponseBackdrop.addEventListener('click', () => {
+    cancelSenderFlow();
   });
-  transferCompleteClose.addEventListener('click', () => {
-    transferCompleteModal.style.display = 'none';
+  waitingCancelBtn.addEventListener('click', () => {
+    cancelSenderFlow();
   });
 
   /***********************************************************
-   * Choose Action Modal
+   * CHOOSE ACTION MODAL
    **********************************************************/
   chooseActionSendFilesBtn.addEventListener('click', () => {
     chooseActionModal.style.display = 'none';
@@ -507,47 +527,55 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /***********************************************************
-   * Waiting / Cancel (sender side)
+   * BACKDROP CLICKS & CANCELS
    **********************************************************/
-  waitingResponseBackdrop.addEventListener('click', () => {
-    waitingResponseModal.style.display = 'none';
-    if (currentRecipientId) {
-      serverConnection.send({
-        type: 'transfer-decline',
-        to: currentRecipientId
-      });
-      currentRecipientId = null;
-      currentMode = null;
-    }
-  });
-  waitingCancelBtn.addEventListener('click', () => {
-    waitingResponseModal.style.display = 'none';
-    if (currentRecipientId) {
-      serverConnection.send({
-        type: 'transfer-decline',
-        to: currentRecipientId
-      });
-      currentRecipientId = null;
-      currentMode = null;
-    }
-  });
-
-  // Incoming request backdrop => close
+  // Incoming request backdrop => decline
   incomingBackdrop.addEventListener('click', () => {
+    // For usability, let's do the same as clicking Decline
+    if (currentRequesterId) {
+      serverConnection.send({ type: 'transfer-decline', to: currentRequesterId });
+    }
     incomingRequestModal.style.display = 'none';
-  });
-
-  // Send message backdrop => close
-  sendMessageBackdrop.addEventListener('click', () => {
-    sendMessageModal.style.display = 'none';
-    currentRecipientId = null;
+    currentRequesterId = null;
     currentMode = null;
   });
 
-  // Incoming message backdrop => close
+  // Receiving status backdrop => optional
+  receivingStatusBackdrop.addEventListener('click', () => {
+    // Could do a receiver-side cancel if you want
+    // e.g. "transfer-cancel" => sender
+  });
+
+  // If the user closes the send-message backdrop => also send a cancel
+  sendMessageBackdrop.addEventListener('click', () => {
+    cancelSenderFlow();
+    messageInput.value = '';
+  });
+
+  // Incoming message backdrop => just close
   incomingMessageBackdrop.addEventListener('click', () => {
     incomingMessageModal.style.display = 'none';
-    currentRequesterId = null;
+  });
+
+  // Transfer complete backdrop => close
+  transferCompleteBackdrop.addEventListener('click', () => {
+    transferCompleteModal.style.display = 'none';
+  });
+  transferCompleteClose.addEventListener('click', () => {
+    transferCompleteModal.style.display = 'none';
+  });
+
+  // Peer lost
+  peerLostBackdrop.addEventListener('click', () => {
+    peerLostModal.style.display = 'none';
+  });
+  peerLostClose.addEventListener('click', () => {
+    peerLostModal.style.display = 'none';
+  });
+
+  // Server disconnected
+  serverDisconnectedClose.addEventListener('click', () => {
+    serverDisconnectedModal.style.display = 'none';
   });
 
   /***********************************************************

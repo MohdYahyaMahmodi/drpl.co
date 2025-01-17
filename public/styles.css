@@ -65,7 +65,9 @@
 #receiving-status-modal,
 #send-message-modal,
 #incoming-message-modal,
-#transfer-complete-modal {
+#transfer-complete-modal,
+#peer-lost-modal,
+#server-disconnected-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -77,7 +79,9 @@
 #receiving-status-modal[style*="display: flex"],
 #send-message-modal[style*="display: flex"],
 #incoming-message-modal[style*="display: flex"],
-#transfer-complete-modal[style*="display: flex"] {
+#transfer-complete-modal[style*="display: flex"],
+#peer-lost-modal[style*="display: flex"],
+#server-disconnected-modal[style*="display: flex"] {
   opacity: 1;
   transform: scale(1);
 }
@@ -90,7 +94,9 @@
 #receiving-status-modal[style*="display: none"],
 #send-message-modal[style*="display: none"],
 #incoming-message-modal[style*="display: none"],
-#transfer-complete-modal[style*="display: none"] {
+#transfer-complete-modal[style*="display: none"],
+#peer-lost-modal[style*="display: none"],
+#server-disconnected-modal[style*="display: none"] {
   opacity: 0;
   transform: scale(0.9);
 }
