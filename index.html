@@ -3,16 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>FileDrop</title>
+  <title>Drpl.co V2</title>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- Font Awesome -->
   <link
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   />
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Custom CSS (with version for cache) -->
+  <link rel="stylesheet" href="styles.css?v=1.0.1" />
 </head>
 <body class="bg-white min-h-screen">
   <!-- Wave Animation -->
@@ -47,7 +50,7 @@
           id="no-peers-message"
           class="text-xl text-[#333533]"
         >
-          Open FileDrop on your other device to get started
+          Open Drpl.co on your other device to get started
         </p>
         <div id="peer-list" class="space-y-4">
           <!-- Peer list will be dynamically generated -->
@@ -57,7 +60,7 @@
 
     <!-- Bottom Content -->
     <div class="p-8 text-center">
-      <img src="logo.svg" alt="FileDrop" class="w-16 mx-auto mb-4" />
+      <img src="logo.svg" alt="Drpl.co" class="w-16 mx-auto mb-4" />
       <p class="text-[#333533] mb-2">
         You are known as
         <span id="device-name" class="font-semibold"></span>
@@ -83,7 +86,7 @@
     <!-- Modal Content -->
     <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-semibold text-[#242423]">About FileDrop</h2>
+        <h2 class="text-2xl font-semibold text-[#242423]">About Drpl.co</h2>
         <button
           id="info-modal-close"
           class="text-[#333533] hover:text-[#242423]"
@@ -93,7 +96,7 @@
       </div>
       <div class="text-[#333533] space-y-6">
         <p class="text-lg">
-          FileDrop is a simple, secure way to share files between devices on the
+          Drpl.co is a simple, secure way to share files between devices on the
           same network.
         </p>
 
@@ -111,7 +114,7 @@
         <div class="space-y-2">
           <h3 class="font-semibold text-lg">How it Works:</h3>
           <ul class="list-disc pl-6 space-y-2">
-            <li>Open FileDrop on both devices</li>
+            <li>Open Drpl.co on both devices</li>
             <li>Select the receiving device</li>
             <li>Choose files to send</li>
             <li>Files are transferred directly and securely</li>
@@ -206,227 +209,9 @@
     </div>
   </div>
 
-  <!-- File Transfer Modal -->
-  <div
-    id="file-transfer-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <!-- Backdrop -->
-    <div
-      id="file-transfer-modal-backdrop"
-      class="absolute inset-0 bg-black bg-opacity-50"
-    ></div>
+  <!-- (All other modals: file-transfer, progress, etc. remain, but are unused for now) -->
 
-    <!-- Modal Content -->
-    <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold text-[#242423]">Send Files</h2>
-        <button
-          id="file-transfer-modal-close"
-          class="text-[#333533] hover:text-[#242423]"
-        >
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="space-y-4">
-        <div
-          id="file-drop-area"
-          class="border-2 border-dashed border-[#333533] rounded-lg p-8 text-center"
-        >
-          <i class="fas fa-cloud-upload-alt text-4xl text-[#333533] mb-4"></i>
-          <p class="text-[#333533]">
-            Drop files here or
-            <label class="text-[#242423] font-semibold cursor-pointer">
-              browse
-              <input
-                id="file-input"
-                type="file"
-                class="hidden"
-                multiple
-              />
-            </label>
-          </p>
-        </div>
-
-        <div id="selected-files-container" style="display: none;">
-          <h3 class="font-semibold text-[#242423] mb-2">Selected Files</h3>
-          <div class="max-h-48 overflow-y-auto">
-            <ul id="selected-files-list" class="space-y-2">
-              <!-- Selected files will be listed here -->
-            </ul>
-          </div>
-        </div>
-
-        <div class="flex justify-end space-x-4 mt-6">
-          <button
-            id="file-transfer-cancel-button"
-            class="px-4 py-2 text-[#333533] hover:text-[#242423]"
-          >
-            Cancel
-          </button>
-          <button
-            id="send-files-button"
-            class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] transition-colors"
-            disabled
-          >
-            Send
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Transfer Progress Modal -->
-  <div
-    id="progress-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
-
-    <!-- Modal Content -->
-    <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
-      <div class="text-center">
-        <i
-          id="progress-icon"
-          class="fas fa-spinner fa-spin text-4xl text-[#333533] mb-4"
-        ></i>
-        <h2
-          id="transfer-status"
-          class="text-xl font-semibold text-[#242423] mb-2"
-        ></h2>
-        <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
-          <div
-            id="progress-bar"
-            class="bg-[#333533] h-2 rounded-full"
-            style="width: 0%;"
-          ></div>
-        </div>
-        <p id="transfer-details" class="text-[#333533]"></p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Incoming File Request Modal -->
-  <div
-    id="incoming-request-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <!-- Backdrop -->
-    <div
-      id="incoming-request-modal-backdrop"
-      class="absolute inset-0 bg-black bg-opacity-50"
-    ></div>
-
-    <!-- Modal Content -->
-    <div class="relative bg-white rounded-lg max-w-md w-full p-6">
-      <div class="text-center space-y-4">
-        <i class="fas fa-file-import text-4xl text-[#333533]"></i>
-        <h2 class="text-xl font-semibold text-[#242423]">Incoming Files</h2>
-        <p class="text-[#333533]">
-          <span id="incoming-peer-id"></span> wants to share files with you
-        </p>
-        <p class="text-sm text-gray-500">
-          <span id="incoming-file-count"></span> files •
-          <span id="incoming-total-size"></span>
-        </p>
-
-        <div class="flex justify-center space-x-4 mt-6">
-          <button
-            id="reject-transfer-button"
-            class="px-6 py-2 text-[#333533] hover:text-[#242423] border border-[#333533] rounded"
-          >
-            Decline
-          </button>
-          <button
-            id="accept-transfer-button"
-            class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] transition-colors"
-          >
-            Accept
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- File Preview Modal -->
-  <div
-    id="file-preview-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <!-- Backdrop -->
-    <div
-      id="file-preview-modal-backdrop"
-      class="absolute inset-0 bg-black bg-opacity-50"
-    ></div>
-
-    <!-- Modal Content -->
-    <div class="relative bg-white rounded-lg max-w-4xl w-full p-6">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-semibold text-[#242423]">Received Files</h2>
-        <button
-          id="file-preview-modal-close"
-          class="text-[#333533] hover:text-[#242423]"
-        >
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <!-- File Carousel -->
-      <div class="relative">
-        <!-- Navigation Buttons -->
-        <button
-          id="prev-file-button"
-          class="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg"
-          style="display: none;"
-        >
-          <i class="fas fa-chevron-left text-[#333533]"></i>
-        </button>
-
-        <button
-          id="next-file-button"
-          class="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg"
-          style="display: none;"
-        >
-          <i class="fas fa-chevron-right text-[#333533]"></i>
-        </button>
-
-        <!-- File Preview Container -->
-        <div
-          id="file-preview-container"
-          class="aspect-video bg-gray-100 rounded-lg flex items-center justify-center mb-4"
-        >
-          <!-- Content will be injected here -->
-        </div>
-
-        <!-- File Info & Controls -->
-        <div class="flex justify-between items-center">
-          <div>
-            <p id="current-file-name" class="font-semibold text-[#242423]"></p>
-            <p id="current-file-size" class="text-sm text-gray-500"></p>
-          </div>
-          <button
-            id="download-file-button"
-            class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] transition-colors"
-          >
-            <i class="fas fa-download mr-2"></i>
-            Download
-          </button>
-        </div>
-
-        <!-- File Pagination -->
-        <div id="file-pagination" class="flex justify-center space-x-2 mt-4">
-          <!-- Pagination dots will be injected here -->
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Custom JS -->
-  <script src="app.js"></script>
+  <!-- Main JS (with version for cache) -->
+  <script src="main.js?v=1.0.1"></script>
 </body>
 </html>

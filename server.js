@@ -49,9 +49,9 @@ process.on('SIGTERM', () => {
 
 // Express app
 const app = express();
-app.use(express.static('.')); // Serve static files (index.html, app.js, etc.)
+app.use(express.static('.')); // Serve our static files (index.html, main.js, etc.)
 
-// Create HTTP server from express
+// Create an HTTP server from express
 const server = http.createServer(app);
 
 // Create a WebSocket server on top of the same HTTP server
@@ -69,7 +69,7 @@ class FileDropServer {
       this._onHeaders(headers, response)
     );
 
-    console.log('FileDrop server is running');
+    console.log('Drpl.co server is running');
   }
 
   _onConnection(peer) {
@@ -77,9 +77,8 @@ class FileDropServer {
     peer.socket.on('message', (msg) => this._onMessage(peer, msg));
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
-    this._keepAlive(peer);
 
-    // Send displayName/deviceName (plus ID) to the connecting peer
+    // Immediately send them their displayName
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -88,11 +87,14 @@ class FileDropServer {
         deviceName: peer.name.deviceName
       }
     });
+
+    // Start keep-alive checks
+    this._keepAlive(peer);
   }
 
   _onHeaders(headers, response) {
-    // The 'headers' event can set cookies if needed. We'll set a random peerid if none.
-    if (!response.headers.cookie || response.headers.cookie.indexOf('peerid=') === -1) {
+    // If no cookie yet, give them a peerId
+    if (!response.headers.cookie || !response.headers.cookie.includes('peerid=')) {
       response.peerId = Peer.uuid();
       headers.push(
         'Set-Cookie: peerid=' + response.peerId + '; SameSite=Strict; Secure'
@@ -112,9 +114,9 @@ class FileDropServer {
       case 'introduce':
         // The client told us its device type
         sender.name.type = parsed.name.deviceType;
-        // Notify others in the same room that 'sender' updated
+        // Notify others in the same "room" (same IP) that sender updated
         this._notifyPeersAboutUpdate(sender);
-        // Send the updated peer list to the sender
+        // Send the updated peers list to sender
         this._sendPeersList(sender);
         break;
 
@@ -127,7 +129,7 @@ class FileDropServer {
         break;
 
       default:
-        // Relay message to intended recipient if "to" is specified
+        // If there's a "to" field, relay to that peer
         if (parsed.to && this._rooms[sender.ip]) {
           const recipientId = parsed.to;
           const recipient = this._rooms[sender.ip][recipientId];
@@ -145,7 +147,7 @@ class FileDropServer {
       this._rooms[peer.ip] = {};
     }
 
-    // Notify existing peers that this new peer joined
+    // Notify existing peers that a new peer joined
     for (const otherPeerId in this._rooms[peer.ip]) {
       const otherPeer = this._rooms[peer.ip][otherPeerId];
       this._send(otherPeer, {
@@ -154,16 +156,17 @@ class FileDropServer {
       });
     }
 
-    // Send the existing list to the new peer
+    // Send existing peers to the new peer
     this._sendPeersList(peer);
 
+    // Add them
     this._rooms[peer.ip][peer.id] = peer;
   }
 
   _leaveRoom(peer) {
     if (!this._rooms[peer.ip] || !this._rooms[peer.ip][peer.id]) return;
-    this._cancelKeepAlive(this._rooms[peer.ip][peer.id]);
 
+    this._cancelKeepAlive(this._rooms[peer.ip][peer.id]);
     delete this._rooms[peer.ip][peer.id];
     peer.socket.terminate();
 
@@ -181,45 +184,43 @@ class FileDropServer {
     }
   }
 
-  _send(peer, message) {
-    if (!peer || peer.socket.readyState !== WebSocket.OPEN) return;
-    peer.socket.send(JSON.stringify(message), (err) => {
-      if (err) console.error(err);
-    });
-  }
-
   _notifyPeersAboutUpdate(sender) {
     const peersInRoom = this._rooms[sender.ip];
-    if (peersInRoom) {
-      for (const peerId in peersInRoom) {
-        const peer = peersInRoom[peerId];
-        if (peer.id !== sender.id) {
-          this._send(peer, {
-            type: 'peer-updated',
-            peer: sender.getInfo()
-          });
-        }
+    if (!peersInRoom) return;
+    for (const pid in peersInRoom) {
+      if (pid !== sender.id) {
+        this._send(peersInRoom[pid], {
+          type: 'peer-updated',
+          peer: sender.getInfo()
+        });
       }
     }
   }
 
   _sendPeersList(peer) {
     const peersInRoom = this._rooms[peer.ip];
-    const otherPeers = [];
+    const others = [];
     for (const pId in peersInRoom) {
       if (pId !== peer.id) {
-        otherPeers.push(peersInRoom[pId].getInfo());
+        others.push(peersInRoom[pId].getInfo());
       }
     }
     this._send(peer, {
       type: 'peers',
-      peers: otherPeers
+      peers: others
+    });
+  }
+
+  _send(peer, message) {
+    if (!peer || peer.socket.readyState !== WebSocket.OPEN) return;
+    peer.socket.send(JSON.stringify(message), (err) => {
+      if (err) console.error('[FileDropServer] Error sending message:', err);
     });
   }
 
   _keepAlive(peer) {
     this._cancelKeepAlive(peer);
-    const timeout = 30000;
+    const timeout = 5000; // Only 5s for faster detection
     if (!peer.lastBeat) {
       peer.lastBeat = Date.now();
     }
@@ -243,7 +244,7 @@ class Peer {
     this.socket = socket;
     this._setIP(request);
     this._setPeerId(request);
-    this.rtcSupported = true; // Assume WebRTC is supported
+    this.rtcSupported = true; // Assume WebRTC
     this._setName(request);
     this.timerId = 0;
     this.lastBeat = Date.now();
@@ -255,7 +256,6 @@ class Peer {
     } else {
       this.ip = request.socket.remoteAddress;
     }
-    // Normalize localhost
     if (this.ip === '::1' || this.ip === '::ffff:127.0.0.1') {
       this.ip = '127.0.0.1';
     }
@@ -265,7 +265,6 @@ class Peer {
     if (request.peerId) {
       this.id = request.peerId;
     } else {
-      // If no peerId from the headers, generate a new one
       const cookies = request.headers.cookie || '';
       const match = cookies.match(/peerid=([^;]+)/);
       if (match) {
@@ -328,9 +327,9 @@ class Peer {
   }
 }
 
-// Start server
+// Start the server
 const port = process.env.PORT || 3002;
 server.listen(port, () => {
-  console.log('Server is listening on port', port);
-  new FileDropServer(wss); // Initiate our signaling
+  console.log(`Server listening on port ${port}`);
+  new FileDropServer(wss);
 });

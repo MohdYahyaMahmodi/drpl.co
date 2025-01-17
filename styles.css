@@ -69,7 +69,6 @@
 #file-preview-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
-
 #info-modal[style*="display: flex"],
 #author-modal[style*="display: flex"],
 #file-transfer-modal[style*="display: flex"],
@@ -79,7 +78,6 @@
   opacity: 1;
   transform: scale(1);
 }
-
 #info-modal[style*="display: none"],
 #author-modal[style*="display: none"],
 #file-transfer-modal[style*="display: none"],
@@ -88,4 +86,22 @@
 #file-preview-modal[style*="display: none"] {
   opacity: 0;
   transform: scale(0.9);
+}
+
+/* 
+  Additional styling for peer buttons: we want them left-aligned 
+  with an icon for device type. We'll handle the icon in JS, 
+  but here's a little override to ensure text-left, etc.
+*/
+.peer-button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  justify-content: flex-start;
+  padding-left: 1rem;
+  gap: 0.75rem;
+}
+
+.peer-device-icon {
+  font-size: 1.2rem;
 }
