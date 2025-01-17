@@ -9,7 +9,6 @@
   z-index: 1;
   pointer-events: none;
 }
-
 .wave {
   position: absolute;
   width: 200%;
@@ -22,7 +21,6 @@
   top: 0;
   left: -50%;
 }
-
 .wave:nth-child(2) {
   animation-duration: 16s;
   opacity: 0.03;
@@ -31,7 +29,6 @@
   animation-duration: 20s;
   opacity: 0.02;
 }
-
 @keyframes wave {
   0% {
     transform: rotate(0deg);
@@ -73,7 +70,6 @@
 #file-preview-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
-
 #info-modal[style*="display: flex"],
 #author-modal[style*="display: flex"],
 #choose-action-modal[style*="display: flex"],
@@ -91,7 +87,6 @@
   opacity: 1;
   transform: scale(1);
 }
-
 #info-modal[style*="display: none"],
 #author-modal[style*="display: none"],
 #choose-action-modal[style*="display: none"],
@@ -119,26 +114,36 @@
   padding-left: 1rem;
   gap: 0.75rem;
 }
-
 .peer-device-icon {
   font-size: 1.2rem;
 }
 
-/* Additional styling for file list */
-.file-item {
+/* File listing for the "send-files-modal" */
+.selected-file-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  justify-content: space-between;
+  background-color: #f9f9f9;
+  padding: 8px;
+  margin-bottom: 5px;
+  border-radius: 6px;
 }
-.file-item .file-name {
-  font-size: 0.9rem;
-  color: #333;
+.selected-file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
-.file-item i {
-  cursor: pointer;
-  color: #555;
+
+/* Progress bar for receiving files */
+.file-progress-bar-container {
+  background-color: #e5e7eb; /* Tailwind gray-200 */
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 10px;
 }
-.file-item i:hover {
-  color: #000;
+.file-progress-bar {
+  background-color: #333533;
+  height: 100%;
+  transition: width 0.2s ease;
 }

@@ -14,8 +14,8 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   />
 
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="styles.css?v=5.0.1" />
+  <!-- Custom CSS (with version for cache-busting) -->
+  <link rel="stylesheet" href="styles.css?v=5.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -84,9 +84,47 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="info-modal-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="info-modal-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
-      <!-- ... content omitted for brevity ... -->
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-semibold text-[#242423]">About Drpl.co</h2>
+        <button
+          id="info-modal-close"
+          class="text-[#333533] hover:text-[#242423]"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="text-[#333533] space-y-6">
+        <p class="text-lg">
+          Drpl.co is a simple, secure way to share files between devices on the
+          same network.
+        </p>
+
+        <div class="space-y-2">
+          <h3 class="font-semibold text-lg">How it Works:</h3>
+          <ul class="list-disc pl-6 space-y-2">
+            <li>Open Drpl.co on both devices</li>
+            <li>Select the receiving device</li>
+            <li>Choose files to send or send a message</li>
+            <li>Transfer is done directly and securely</li>
+          </ul>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-gray-200">
+          <a
+            href="https://github.com/yourusername/filedrop"
+            target="_blank"
+            class="inline-flex items-center space-x-2 text-[#333533] hover:text-[#242423]"
+          >
+            <i class="fab fa-github text-xl"></i>
+            <span>View on GitHub</span>
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -96,9 +134,68 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="author-modal-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="author-modal-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6">
-      <!-- ... content omitted for brevity ... -->
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-semibold text-[#242423]">About the Author</h2>
+        <button
+          id="author-modal-close"
+          class="text-[#333533] hover:text-[#242423]"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="text-[#333533] space-y-6">
+        <div class="text-center">
+          <img
+            src="https://pbs.twimg.com/profile_images/1839012130462511107/9tdjr6P9_400x400.jpg"
+            alt="Author"
+            class="w-24 h-24 rounded-full mx-auto mb-4"
+          />
+          <h3 class="text-xl font-semibold">Mohd Mahmodi</h3>
+          <p class="text-gray-600">Machine Learning Engineer</p>
+        </div>
+
+        <div class="flex justify-center space-x-4">
+          <a
+            href="https://x.com/mohdmahmodi"
+            target="_blank"
+            class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+          >
+            <i class="fab fa-twitter"></i>
+          </a>
+          <a
+            href="https://github.com/MohdYahyaMahmodi"
+            target="_blank"
+            class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+          >
+            <i class="fab fa-github"></i>
+          </a>
+          <a
+            href="https://linkedin.com/in/mohdmahmodi"
+            target="_blank"
+            class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+          >
+            <i class="fab fa-linkedin"></i>
+          </a>
+          <a
+            href="https://mohdmahmodi.com"
+            target="_blank"
+            class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+          >
+            <i class="fas fa-globe"></i>
+          </a>
+        </div>
+
+        <div class="text-center">
+          <p class="text-gray-600">
+            Built with ❤️ using WebRTC, JavaScript, and Tailwind CSS
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -108,8 +205,13 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="choose-action-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
-    <div class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center">
+    <div
+      id="choose-action-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center"
+    >
       <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
       <p class="text-[#333533] mb-6" id="choose-action-device-name"></p>
       <div class="flex flex-col space-y-4">
@@ -135,9 +237,14 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="incoming-request-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="incoming-request-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6">
-      <h2 class="text-xl font-semibold mb-4 text-[#242423]">Incoming Transfer</h2>
+      <h2 class="text-xl font-semibold mb-4 text-[#242423]">
+        Incoming Transfer
+      </h2>
       <p class="text-[#333533] mb-4" id="incoming-request-text"></p>
       <div class="flex items-center space-x-2 mb-4">
         <input
@@ -172,9 +279,14 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="waiting-response-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="waiting-response-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center text-center">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Waiting for Response</h2>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Waiting for Response
+      </h2>
       <p class="text-[#333533] opacity-75 mb-4" id="waiting-response-text"></p>
       <button
         id="waiting-cancel-button"
@@ -191,7 +303,10 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="receiving-status-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="receiving-status-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div
       class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center flex flex-col items-center justify-center"
     >
@@ -206,9 +321,14 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="send-message-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="send-message-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
-      <h2 class="text-xl font-semibold text-[#242423] mb-4">Send a Message</h2>
+      <h2 class="text-xl font-semibold text-[#242423] mb-4">
+        Send a Message
+      </h2>
       <textarea
         id="message-input"
         rows="4"
@@ -232,119 +352,35 @@
     </div>
   </div>
 
-  <!-- NEW: Send Files Modal -->
+  <!-- Incoming Message Modal (receiver side) -->
   <div
-    id="send-files-modal"
+    id="incoming-message-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="send-files-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
-    <div class="relative bg-white rounded-lg max-w-lg w-full p-6 flex flex-col">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Send Files</h2>
-      <p class="text-[#333533] opacity-75 mb-4">Drag and drop files you’d like to send.</p>
-
+    <div
+      id="incoming-message-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="incoming-message-header"></h2>
       <div
-        id="drop-zone"
-        class="border-2 border-dashed border-gray-300 rounded-md p-6 text-center cursor-pointer mb-4"
-      >
-        <p class="text-gray-600">Drop files here or click to select</p>
-        <input
-          id="file-input"
-          type="file"
-          multiple
-          class="hidden"
-        />
-      </div>
-
-      <!-- List of selected files -->
-      <div
-        id="selected-files-list"
-        class="overflow-y-auto max-h-32 border border-gray-200 rounded p-2"
-      >
-        <!-- each file item: "filename", [X] remove -->
-      </div>
-
-      <div class="flex justify-end space-x-4 mt-4">
+        id="incoming-message-text"
+        class="mb-4 p-2 border border-gray-300 rounded h-32 overflow-y-auto"
+        style="white-space: pre-wrap;"
+      ></div>
+      <div class="flex justify-end space-x-4">
         <button
-          id="send-files-cancel"
+          id="incoming-message-close"
           class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
         >
-          Cancel
+          Close
         </button>
         <button
-          id="send-files-button"
+          id="incoming-message-respond"
           class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
         >
-          Send
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- NEW: Receiving Files Modal with progress -->
-  <div
-    id="receiving-files-modal"
-    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <div id="receiving-files-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
-    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Receiving Files</h2>
-      <div id="receiving-progress-text" class="text-[#333533] mb-4">
-        <!-- e.g. "File 1/5" -->
-      </div>
-      <div id="receiving-progress-bar" class="w-full bg-gray-200 rounded h-4 mb-2">
-        <div class="bg-blue-500 h-4 rounded" style="width:0%"></div>
-      </div>
-      <p id="receiving-filename" class="text-gray-700 text-sm mb-2"></p>
-    </div>
-  </div>
-
-  <!-- NEW: File Preview Modal (slideshow) -->
-  <div
-    id="file-preview-modal"
-    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-    style="display: none;"
-  >
-    <div id="file-preview-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
-    <div class="relative bg-white rounded-lg w-full max-w-xl p-6 flex flex-col items-center">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Received Files</h2>
-
-      <!-- Slideshow content -->
-      <div class="relative w-full flex items-center justify-center" style="height:300px;">
-        <button
-          id="file-preview-prev"
-          class="absolute left-2 text-2xl bg-gray-200 w-8 h-8 rounded-full flex items-center justify-center"
-        >
-          <i class="fas fa-chevron-left"></i>
-        </button>
-        <div id="file-preview-display" class="text-center"></div>
-        <button
-          id="file-preview-next"
-          class="absolute right-2 text-2xl bg-gray-200 w-8 h-8 rounded-full flex items-center justify-center"
-        >
-          <i class="fas fa-chevron-right"></i>
-        </button>
-      </div>
-
-      <div class="mt-4 flex space-x-4">
-        <button
-          id="file-download-button"
-          class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
-        >
-          Download File
-        </button>
-        <button
-          id="file-download-all-button"
-          class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
-        >
-          Download All
-        </button>
-        <button
-          id="file-preview-close"
-          class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
-        >
-          Close
+          Respond Back
         </button>
       </div>
     </div>
@@ -356,7 +392,10 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="transfer-complete-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="transfer-complete-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col items-center">
       <h2 class="text-xl font-semibold text-[#242423] mb-2" id="transfer-complete-title"></h2>
       <p class="text-[#333533] opacity-75 mb-4" id="transfer-complete-text"></p>
@@ -375,9 +414,14 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="peer-lost-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="peer-lost-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Connection Lost</h2>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Connection Lost
+      </h2>
       <p class="text-[#333533] opacity-75 mb-4">
         The other device has disconnected.
       </p>
@@ -396,9 +440,14 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <div id="server-disconnected-backdrop" class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div
+      id="server-disconnected-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2">Server Disconnected</h2>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Server Disconnected
+      </h2>
       <p class="text-[#333533] opacity-75 mb-4">
         The server connection has been lost. Please refresh or try again later.
       </p>
@@ -411,7 +460,155 @@
     </div>
   </div>
 
+  <!-- ================================
+       NEW MODALS FOR FILE TRANSFER
+       ================================ -->
+
+  <!-- Send Files Modal (sender side) -->
+  <div
+    id="send-files-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="send-files-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-xl w-full p-6 flex flex-col"
+    >
+      <h2 class="text-xl font-semibold text-[#242423] mb-4">
+        Drag and drop files you'd like to send
+      </h2>
+      <div
+        id="drop-zone"
+        class="border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center py-8 mb-4"
+      >
+        <p class="text-gray-500 text-center">
+          Drop files here or click to select
+        </p>
+        <input
+          type="file"
+          id="file-input"
+          multiple
+          class="opacity-0 absolute"
+          style="width:0;height:0;border:none;padding:0;margin:0;"
+        />
+      </div>
+      <div
+        id="selected-files-container"
+        class="overflow-y-auto max-h-48 mb-4"
+      >
+        <!-- Dynamically populated with file names/icons -->
+      </div>
+      <div class="flex justify-end space-x-4">
+        <button
+          id="send-files-cancel"
+          class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+        >
+          Cancel
+        </button>
+        <button
+          id="start-file-transfer"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+          disabled
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receiving Files Modal (receiver side) -->
+  <div
+    id="receiving-files-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="receiving-files-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-lg w-full p-6"
+    >
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Receiving files
+      </h2>
+      <p class="text-[#333533] text-sm mb-4">
+        Please wait while files are being transferred...
+      </p>
+      <div
+        id="file-progress-list"
+        class="space-y-4"
+      >
+        <!-- Each file's progress bar will be rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- File Preview Modal (receiver side) -->
+  <div
+    id="file-preview-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="file-preview-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-3xl w-full p-6 flex flex-col"
+    >
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-[#242423]">Received Files</h2>
+        <button
+          id="file-preview-close"
+          class="text-[#333533] hover:text-[#242423]"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div
+        id="file-preview-content"
+        class="flex flex-col items-center justify-center"
+      >
+        <!-- Slideshow area: we'll dynamically fill it -->
+      </div>
+      <div class="flex justify-between items-center mt-4">
+        <div>
+          <button
+            id="prev-file-btn"
+            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
+          >
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <button
+            id="next-file-btn"
+            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] ml-2"
+          >
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+        <div>
+          <button
+            id="download-current-file"
+            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
+          >
+            Download
+          </button>
+          <button
+            id="download-all-files"
+            class="px-4 py-2 ml-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+          >
+            Download All
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Main JS -->
-  <script src="main.js?v=5.0.1"></script>
+  <script src="main.js?v=5.0.0"></script>
 </body>
 </html>

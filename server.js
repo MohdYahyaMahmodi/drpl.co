@@ -3,7 +3,6 @@ import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import parser from 'ua-parser-js';
-import WebSocket from 'ws';
 
 /*************************************************************
  * server.js
@@ -26,6 +25,7 @@ const nounsList = [
   'Griffin', 'Octopus'
 ];
 
+// A simple function to produce a consistent displayName
 function getDisplayName(id) {
   const hash1 = (id + 'adjective').hashCode();
   const hash2 = (id + 'noun').hashCode();
@@ -57,7 +57,7 @@ process.on('SIGTERM', () => {
 });
 
 const app = express();
-app.use(express.static('public')); // Serve static files in /public
+app.use(express.static('public')); // Serve everything in ./public as static
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -65,7 +65,7 @@ const wss = new WebSocketServer({ server });
 class FileDropServer {
   constructor(wss) {
     this._wss = wss;
-    this._rooms = {};
+    this._rooms = {}; // { ip: { peerId: Peer } }
 
     this._wss.on('connection', (socket, request) =>
       this._onConnection(new Peer(socket, request))
@@ -94,7 +94,7 @@ class FileDropServer {
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // Send them their displayName
+    // Send the peer's random display name right away
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -117,6 +117,7 @@ class FileDropServer {
 
     switch (msg.type) {
       case 'introduce':
+        // Save the device type for the peer, notify others
         sender.name.type = msg.name.deviceType;
         this._notifyPeersAboutUpdate(sender);
         this._sendPeersList(sender);
@@ -131,7 +132,7 @@ class FileDropServer {
         break;
 
       default:
-        // If there's a "to", we relay
+        // Relay if there's a "to" field
         if (msg.to && this._rooms[sender.ip]) {
           const recipient = this._rooms[sender.ip][msg.to];
           if (!recipient) return;
@@ -147,16 +148,18 @@ class FileDropServer {
     if (!this._rooms[peer.ip]) {
       this._rooms[peer.ip] = {};
     }
-    // Notify existing peers
+
+    // Notify existing peers that someone joined
     for (const otherId in this._rooms[peer.ip]) {
       this._send(this._rooms[peer.ip][otherId], {
         type: 'peer-joined',
         peer: peer.getInfo()
       });
     }
-    // Send the new peer the list of existing peers
+    // Send the new peer the existing peers list
     this._sendPeersList(peer);
 
+    // Add the new peer
     this._rooms[peer.ip][peer.id] = peer;
   }
 
@@ -167,6 +170,7 @@ class FileDropServer {
     delete this._rooms[peer.ip][peer.id];
     peer.socket.terminate();
 
+    // If the room is empty, remove it
     if (!Object.keys(this._rooms[peer.ip]).length) {
       delete this._rooms[peer.ip];
     } else {
@@ -225,7 +229,7 @@ class FileDropServer {
   }
 
   _send(peer, msg) {
-    if (peer.socket.readyState === WebSocket.OPEN) {
+    if (peer.socket.readyState === 1) {
       peer.socket.send(JSON.stringify(msg));
     }
   }
@@ -237,7 +241,7 @@ class Peer {
     this._setIP(request);
     this._setPeerId(request);
     this._setName(request);
-    this.rtcSupported = true;
+    this.rtcSupported = true; // Not using RTC in this example, but we keep a flag
     this.timerId = 0;
     this.lastBeat = Date.now();
   }
