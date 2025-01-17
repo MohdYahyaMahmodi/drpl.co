@@ -56,7 +56,7 @@
   background: #242423;
 }
 
-/* Modal Transitions */
+/* Modal transitions, etc. */
 #info-modal,
 #author-modal,
 #choose-action-modal,
@@ -64,13 +64,9 @@
 #waiting-response-modal,
 #compose-message-modal,
 #received-message-modal,
-#respond-message-modal,
-#file-transfer-modal,
-#progress-modal,
-#file-preview-modal {
+#respond-message-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
-
 #info-modal[style*="display: flex"],
 #author-modal[style*="display: flex"],
 #choose-action-modal[style*="display: flex"],
@@ -78,14 +74,10 @@
 #waiting-response-modal[style*="display: flex"],
 #compose-message-modal[style*="display: flex"],
 #received-message-modal[style*="display: flex"],
-#respond-message-modal[style*="display: flex"],
-#file-transfer-modal[style*="display: flex"],
-#progress-modal[style*="display: flex"],
-#file-preview-modal[style*="display: flex"] {
+#respond-message-modal[style*="display: flex"] {
   opacity: 1;
   transform: scale(1);
 }
-
 #info-modal[style*="display: none"],
 #author-modal[style*="display: none"],
 #choose-action-modal[style*="display: none"],
@@ -93,10 +85,7 @@
 #waiting-response-modal[style*="display: none"],
 #compose-message-modal[style*="display: none"],
 #received-message-modal[style*="display: none"],
-#respond-message-modal[style*="display: none"],
-#file-transfer-modal[style*="display: none"],
-#progress-modal[style*="display: none"],
-#file-preview-modal[style*="display: none"] {
+#respond-message-modal[style*="display: none"] {
   opacity: 0;
   transform: scale(0.9);
 }
