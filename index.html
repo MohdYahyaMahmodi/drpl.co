@@ -42,7 +42,6 @@
   </div>
 
   <!-- Main Content -->
-  <!-- Give it a lower z-index so modals can be on top -->
   <div class="relative z-0 h-full flex flex-col">
     <!-- Center Content -->
     <div class="flex-1 flex items-center justify-center px-4">
@@ -56,10 +55,11 @@
         <!-- 
           A container that can scroll if there's too many peers.
           max-h-[300px] => about 300px tall, then scroll
+          px-4 => horizontal padding so scrollbar doesn't overlap
         -->
         <div
           id="scroll-container"
-          class="mt-6 max-h-[300px] overflow-y-auto"
+          class="mt-6 max-h-[300px] overflow-y-auto px-4"
         >
           <!-- 
             The peer-list container has space-y-[10px] 
