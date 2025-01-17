@@ -54,7 +54,7 @@ process.on('SIGTERM', () => {
 
 // Express app
 const app = express();
-app.use(express.static('.')); // Serve our static files (index.html, main.js, etc.)
+app.use(express.static('public'));  // Serve our static files (index.html, main.js, etc.)
 
 // Create an HTTP server from express
 const server = http.createServer(app);

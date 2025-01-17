@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache) -->
-  <link rel="stylesheet" href="styles.css?v=1.0.6" />
+  <link rel="stylesheet" href="styles.css?v=1.0.8" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -52,19 +52,12 @@
         >
           Open Drpl.co on your other device to get started
         </p>
-        <!-- 
-          A container that can scroll if there's too many peers.
-          max-h-[300px] => about 300px tall, then scroll
-          px-4 => horizontal padding so scrollbar doesn't overlap
-        -->
+
+        <!-- Scroll container for peers -->
         <div
           id="scroll-container"
           class="mt-6 max-h-[300px] overflow-y-auto px-4"
         >
-          <!-- 
-            The peer-list container has space-y-[10px] 
-            so each button gets a 10px gap underneath it.
-          -->
           <div id="peer-list" class="flex flex-col space-y-[10px]">
             <!-- Peer list will be dynamically generated -->
           </div>
@@ -85,7 +78,7 @@
     </div>
   </div>
 
-  <!-- Info Modal (HIGH z-index so it is always on top of the main content) -->
+  <!-- Info Modal (HIGH z-index so it is always on top) -->
   <div
     id="info-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -138,7 +131,7 @@
     </div>
   </div>
 
-  <!-- Author Modal (HIGH z-index as well) -->
+  <!-- Author Modal -->
   <div
     id="author-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -212,9 +205,67 @@
     </div>
   </div>
 
-  <!-- (All other modals: file-transfer, progress, etc. remain, but are unused for now) -->
+  <!-- Incoming Transfer Request Modal -->
+  <div
+    id="incoming-request-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="incoming-request-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-sm w-full p-6">
+      <h2 class="text-xl font-semibold mb-4 text-[#242423]">
+        Incoming Transfer
+      </h2>
+      <p class="text-[#333533] mb-4" id="incoming-request-text">
+        <!-- e.g. "Electric Panther wants to transfer files" -->
+      </p>
+      <div class="flex space-x-4 justify-center">
+        <button
+          id="incoming-decline-button"
+          class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+        >
+          Decline
+        </button>
+        <button
+          id="incoming-accept-button"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+        >
+          Accept
+        </button>
+      </div>
+    </div>
+  </div>
 
-  <!-- Main JS (with version for cache) -->
-  <script src="main.js?v=1.0.6"></script>
+  <!-- Waiting for Response Modal (on the sender side) -->
+  <div
+    id="waiting-response-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="waiting-response-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center text-center">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Waiting for Response
+      </h2>
+      <p class="text-[#333533] opacity-75 mb-4" id="waiting-response-text">
+        <!-- e.g. "Waiting for Red Tiger to accept..." -->
+      </p>
+      <button
+        id="waiting-cancel-button"
+        class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <!-- Main JS -->
+  <script src="main.js?v=1.0.8"></script>
 </body>
 </html>
