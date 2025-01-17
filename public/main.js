@@ -3,6 +3,7 @@
  * 1) Adds a "transfer-cancel" message for real-time cancel
  * 2) Closes modals if peer leaves or if server disconnects
  * 3) Ensures no overlapping modals
+ * 4) **FIX**: In `transfer-accept`, set `currentRecipientId = msg.sender`
  *************************************************************/
 
 function detectDeviceType() {
@@ -131,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const deviceType = detectDeviceType();
   const serverConnection = new ServerConnection(deviceType);
 
-  // -- Grab references to modals/elements --
+  // Grab references to modals/elements
   const peerListElement = document.getElementById('peer-list');
   const noPeersMessage = document.getElementById('no-peers-message');
 
@@ -193,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const authorModalClose = document.getElementById('author-modal-close');
   const authorModalBackdrop = document.getElementById('author-modal-backdrop');
 
-  // --- Utility to close all modals if needed ---
+  // Utility to close all modals
   function closeAllModals() {
     [
       chooseActionModal, 
@@ -206,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ].forEach(m => m.style.display = 'none');
   }
 
-  // --- Update Peer List ---
+  // Update Peer List
   function updatePeerList() {
     peerListElement.innerHTML = '';
     const peerIds = Object.keys(peers);
@@ -367,7 +368,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // On the sender side => sees accept
   window.addEventListener('transfer-accept', e => {
     const msg = e.detail;
+
+    // Hide the "Waiting" modal
     waitingResponseModal.style.display = 'none';
+
+    // **FIX**: track who accepted the request, so if we cancel, 
+    // we know which peer to send "transfer-cancel" to.
+    currentRecipientId = msg.sender;
+
     if (msg.mode === 'files') {
       alert('They accepted file transfer! (Not implemented yet.)');
     } else if (msg.mode === 'message') {
@@ -385,10 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // On either side => sees "transfer-cancel"
   window.addEventListener('transfer-cancel', e => {
-    const msg = e.detail;
-    // If the other side canceled, we close any "waiting" or "receiving" modals
     closeAllModals();
-    // Optionally show a small message or alert
     alert('The other device canceled the transfer.');
     currentRecipientId = null;
     currentRequesterId = null;
@@ -404,8 +409,6 @@ document.addEventListener('DOMContentLoaded', () => {
     currentRecipientId = null;
     currentMode = null;
   }
-
-  // CANCEL FROM RECEIVER => we could do similarly if the receiver changes its mind mid-flow
 
   /***********************************************************
    * "Receiving Status" (Receiver side)
@@ -427,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentRecipientId) return;
     const text = messageInput.value.trim();
     if (!text) {
-      // No text => optional: do nothing or auto-cancel
       return;
     }
     serverConnection.send({
@@ -438,12 +440,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     sendMessageModal.style.display = 'none';
     messageInput.value = '';
-    // We remain in a state until the receiver acknowledges
-    // but we do not strictly need to wait. We'll just let them respond with "transfer-complete"
   });
 
   sendMessageCancel.addEventListener('click', () => {
-    // CANCEL => tell the receiver
+    // Cancel => tell the receiver
     cancelSenderFlow();
     messageInput.value = '';
   });
@@ -456,9 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const msg = e.detail;
     const fromName = msg.fromName || 'Unknown';
+    currentRequesterId = msg.sender;
+
     incomingMessageHeader.textContent = `Message from ${fromName}`;
     incomingMessageText.textContent = msg.text || '';
-    currentRequesterId = msg.sender;
     incomingMessageModal.style.display = 'flex';
 
     // Acknowledge => "transfer-complete"
@@ -531,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
    **********************************************************/
   // Incoming request backdrop => decline
   incomingBackdrop.addEventListener('click', () => {
-    // For usability, let's do the same as clicking Decline
     if (currentRequesterId) {
       serverConnection.send({ type: 'transfer-decline', to: currentRequesterId });
     }
@@ -540,24 +540,20 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMode = null;
   });
 
-  // Receiving status backdrop => optional
-  receivingStatusBackdrop.addEventListener('click', () => {
-    // Could do a receiver-side cancel if you want
-    // e.g. "transfer-cancel" => sender
-  });
+  // receivingStatusBackdrop => optionally do a receiver cancel
 
-  // If the user closes the send-message backdrop => also send a cancel
+  // If the user clicks the black backdrop on the send-message modal => cancel
   sendMessageBackdrop.addEventListener('click', () => {
     cancelSenderFlow();
     messageInput.value = '';
   });
 
-  // Incoming message backdrop => just close
+  // incoming-message-backdrop => just close
   incomingMessageBackdrop.addEventListener('click', () => {
     incomingMessageModal.style.display = 'none';
   });
 
-  // Transfer complete backdrop => close
+  // transferCompleteBackdrop => close
   transferCompleteBackdrop.addEventListener('click', () => {
     transferCompleteModal.style.display = 'none';
   });
@@ -565,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     transferCompleteModal.style.display = 'none';
   });
 
-  // Peer lost
+  // peerLostBackdrop => close
   peerLostBackdrop.addEventListener('click', () => {
     peerLostModal.style.display = 'none';
   });
@@ -573,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
     peerLostModal.style.display = 'none';
   });
 
-  // Server disconnected
+  // serverDisconnectedClose => close
   serverDisconnectedClose.addEventListener('click', () => {
     serverDisconnectedModal.style.display = 'none';
   });

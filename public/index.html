@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache-busting) -->
-  <link rel="stylesheet" href="styles.css?v=4.0.0" />
+  <link rel="stylesheet" href="styles.css?v=4.0.1" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -84,13 +84,10 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <!-- Backdrop -->
     <div
       id="info-modal-backdrop"
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
-
-    <!-- Modal Content -->
     <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-semibold text-[#242423]">About Drpl.co</h2>
@@ -137,13 +134,10 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
-    <!-- Backdrop -->
     <div
       id="author-modal-backdrop"
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
-
-    <!-- Modal Content -->
     <div class="relative bg-white rounded-lg max-w-md w-full p-6">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-semibold text-[#242423]">About the Author</h2>
@@ -219,9 +213,7 @@
       class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center"
     >
       <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
-      <p class="text-[#333533] mb-6" id="choose-action-device-name">
-        <!-- e.g. "Send to Mystic Serpent" -->
-      </p>
+      <p class="text-[#333533] mb-6" id="choose-action-device-name"></p>
       <div class="flex flex-col space-y-4">
         <button
           id="choose-action-send-files"
@@ -253,9 +245,7 @@
       <h2 class="text-xl font-semibold mb-4 text-[#242423]">
         Incoming Transfer
       </h2>
-      <p class="text-[#333533] mb-4" id="incoming-request-text">
-        <!-- e.g. "Electric Panther wants to send files" -->
-      </p>
+      <p class="text-[#333533] mb-4" id="incoming-request-text"></p>
       <div class="flex items-center space-x-2 mb-4">
         <input
           type="checkbox"
@@ -297,9 +287,7 @@
       <h2 class="text-xl font-semibold text-[#242423] mb-2">
         Waiting for Response
       </h2>
-      <p class="text-[#333533] opacity-75 mb-4" id="waiting-response-text">
-        <!-- e.g. "Waiting for Red Tiger to accept..." -->
-      </p>
+      <p class="text-[#333533] opacity-75 mb-4" id="waiting-response-text"></p>
       <button
         id="waiting-cancel-button"
         class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
@@ -323,14 +311,11 @@
       class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center flex flex-col items-center justify-center"
     >
       <h2 class="text-xl font-semibold text-[#242423] mb-2">Waiting for Sender</h2>
-      <p class="text-[#333533] opacity-75 mb-4" id="receiving-status-text">
-        <!-- e.g. "Waiting for Mystic Serpent to send a message..." -->
-      </p>
-      <!-- Could add a "Cancel" button if you want to abort -->
+      <p class="text-[#333533] opacity-75 mb-4" id="receiving-status-text"></p>
     </div>
   </div>
 
-  <!-- Send Message Modal (sender side after accept) -->
+  <!-- Send Message Modal (sender side) -->
   <div
     id="send-message-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -378,16 +363,12 @@
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="incoming-message-header">
-        <!-- e.g. "Message from Red Tiger" -->
-      </h2>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="incoming-message-header"></h2>
       <div
         id="incoming-message-text"
         class="mb-4 p-2 border border-gray-300 rounded h-32 overflow-y-auto"
         style="white-space: pre-wrap;"
-      >
-        <!-- The actual message text goes here -->
-      </div>
+      ></div>
       <div class="flex justify-end space-x-4">
         <button
           id="incoming-message-close"
@@ -416,12 +397,8 @@
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col items-center">
-      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="transfer-complete-title">
-        <!-- e.g. "Transfer Complete" or "Transfer Error" -->
-      </h2>
-      <p class="text-[#333533] opacity-75 mb-4" id="transfer-complete-text">
-        <!-- e.g. "Your message to Mystic Serpent has been delivered" -->
-      </p>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="transfer-complete-title"></h2>
+      <p class="text-[#333533] opacity-75 mb-4" id="transfer-complete-text"></p>
       <button
         id="transfer-complete-close"
         class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
@@ -431,7 +408,7 @@
     </div>
   </div>
 
-  <!-- NEW: Peer/Connection Lost Modal -->
+  <!-- Peer Lost Modal -->
   <div
     id="peer-lost-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -445,7 +422,7 @@
       <h2 class="text-xl font-semibold text-[#242423] mb-2">
         Connection Lost
       </h2>
-      <p class="text-[#333533] opacity-75 mb-4" id="peer-lost-text">
+      <p class="text-[#333533] opacity-75 mb-4">
         The other device has disconnected.
       </p>
       <button
@@ -457,7 +434,7 @@
     </div>
   </div>
 
-  <!-- NEW: Server Disconnected Modal -->
+  <!-- Server Disconnected Modal -->
   <div
     id="server-disconnected-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -484,6 +461,6 @@
   </div>
 
   <!-- Main JS -->
-  <script src="main.js?v=4.0.0"></script>
+  <script src="main.js?v=4.0.1"></script>
 </body>
 </html>
