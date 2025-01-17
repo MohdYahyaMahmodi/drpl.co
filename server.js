@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import parser from 'ua-parser-js';
+import WebSocket from 'ws';
 
 /*************************************************************
  * server.js
