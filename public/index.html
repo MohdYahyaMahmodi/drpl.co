@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache-busting) -->
-  <link rel="stylesheet" href="styles.css?v=3.0.0" />
+  <link rel="stylesheet" href="styles.css?v=3.0.1" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -326,7 +326,7 @@
       <p class="text-[#333533] opacity-75 mb-4" id="receiving-status-text">
         <!-- e.g. "Waiting for Mystic Serpent to send a message..." -->
       </p>
-      <!-- (Optional: "Cancel" button if we want to abort receiving) -->
+      <!-- Could add a "Cancel" button if you want to abort -->
     </div>
   </div>
 
@@ -405,7 +405,33 @@
     </div>
   </div>
 
+  <!-- Transfer Complete Modal (sender side) -->
+  <div
+    id="transfer-complete-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="transfer-complete-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col items-center">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="transfer-complete-title">
+        <!-- e.g. "Transfer Complete" or "Transfer Error" -->
+      </h2>
+      <p class="text-[#333533] opacity-75 mb-4" id="transfer-complete-text">
+        <!-- e.g. "Your message to Mystic Serpent has been delivered" -->
+      </p>
+      <button
+        id="transfer-complete-close"
+        class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
   <!-- Main JS -->
-  <script src="main.js?v=3.0.0"></script>
+  <script src="main.js?v=3.0.1"></script>
 </body>
 </html>

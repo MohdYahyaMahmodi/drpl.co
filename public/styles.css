@@ -64,7 +64,8 @@
 #waiting-response-modal,
 #receiving-status-modal,
 #send-message-modal,
-#incoming-message-modal {
+#incoming-message-modal,
+#transfer-complete-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -75,7 +76,8 @@
 #waiting-response-modal[style*="display: flex"],
 #receiving-status-modal[style*="display: flex"],
 #send-message-modal[style*="display: flex"],
-#incoming-message-modal[style*="display: flex"] {
+#incoming-message-modal[style*="display: flex"],
+#transfer-complete-modal[style*="display: flex"] {
   opacity: 1;
   transform: scale(1);
 }
@@ -87,7 +89,8 @@
 #waiting-response-modal[style*="display: none"],
 #receiving-status-modal[style*="display: none"],
 #send-message-modal[style*="display: none"],
-#incoming-message-modal[style*="display: none"] {
+#incoming-message-modal[style*="display: none"],
+#transfer-complete-modal[style*="display: none"] {
   opacity: 0;
   transform: scale(0.9);
 }
