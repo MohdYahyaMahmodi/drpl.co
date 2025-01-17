@@ -5,14 +5,19 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import parser from 'ua-parser-js';
 
-// Word lists for generating random display names
+// Word lists for generating random display names (expanded)
 const adjectivesList = [
   'Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver',
-  'Crystal', 'Cosmic', 'Electric', 'Mystic'
+  'Crystal', 'Cosmic', 'Electric', 'Mystic', 'Shadow', 'Radiant',
+  'Midnight', 'Solar', 'Lunar', 'Cobalt', 'Verdant', 'Scarlet',
+  'Azure', 'Thunder'
 ];
+
 const nounsList = [
-  'Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon',
-  'Tiger', 'Falcon', 'Panther', 'Hawk', 'Bear'
+  'Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger',
+  'Falcon', 'Panther', 'Hawk', 'Bear', 'Serpent', 'Leopard',
+  'Raven', 'Shark', 'Cheetah', 'Pegasus', 'Minotaur', 'Orca',
+  'Griffin', 'Octopus'
 ];
 
 // Helper function to generate displayName based on peer ID
