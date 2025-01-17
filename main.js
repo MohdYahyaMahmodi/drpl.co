@@ -113,7 +113,8 @@ class ServerConnection {
 }
 
 /*************************************************************
- * DOM logic: keep track of peers, show them with icons
+ * DOM logic: keep track of peers, show them with icons,
+ * handle modals
  *************************************************************/
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[main.js] DOMContentLoaded');
@@ -124,9 +125,22 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[main.js] Device type is:', deviceType);
   const serverConnection = new ServerConnection(deviceType);
 
-  // UI references
+  // UI references for peers
   const peerListElement = document.getElementById('peer-list');
   const noPeersMessage = document.getElementById('no-peers-message');
+
+  // UI references for modals
+  const infoButton = document.getElementById('info-button');
+  const authorButton = document.getElementById('author-button');
+  
+  const infoModal = document.getElementById('info-modal');
+  const authorModal = document.getElementById('author-modal');
+  
+  const infoModalClose = document.getElementById('info-modal-close');
+  const infoModalBackdrop = document.getElementById('info-modal-backdrop');
+  
+  const authorModalClose = document.getElementById('author-modal-close');
+  const authorModalBackdrop = document.getElementById('author-modal-backdrop');
 
   // For icons
   function getDeviceIcon(deviceType) {
@@ -139,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Peer list rendering
   function updatePeerList() {
     console.log('[updatePeerList] peers:', peers);
 
@@ -180,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Listen for custom events
+  // Listen for custom events from server
   window.addEventListener('peers', (evt) => {
     console.log('[event:peers]', evt.detail);
     peers = {};
@@ -215,5 +230,37 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[event:peer-updated]', updatedPeer);
     peers[updatedPeer.id] = updatedPeer;
     updatePeerList();
+  });
+
+  /************************************************************
+   * OPEN/CLOSE MODALS
+   ************************************************************/
+  
+  // Info Modal
+  infoButton.addEventListener('click', () => {
+    console.log('[UI] info-button clicked, opening info-modal');
+    infoModal.style.display = 'flex';
+  });
+  infoModalClose.addEventListener('click', () => {
+    console.log('[UI] info-modal-close clicked, closing info-modal');
+    infoModal.style.display = 'none';
+  });
+  infoModalBackdrop.addEventListener('click', () => {
+    console.log('[UI] info-modal-backdrop clicked, closing info-modal');
+    infoModal.style.display = 'none';
+  });
+  
+  // Author Modal
+  authorButton.addEventListener('click', () => {
+    console.log('[UI] author-button clicked, opening author-modal');
+    authorModal.style.display = 'flex';
+  });
+  authorModalClose.addEventListener('click', () => {
+    console.log('[UI] author-modal-close clicked, closing author-modal');
+    authorModal.style.display = 'none';
+  });
+  authorModalBackdrop.addEventListener('click', () => {
+    console.log('[UI] author-modal-backdrop clicked, closing author-modal');
+    authorModal.style.display = 'none';
   });
 });
