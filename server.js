@@ -329,7 +329,7 @@ class Peer {
 }
 
 // Start server
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3002;
 server.listen(port, () => {
   console.log('Server is listening on port', port);
   new FileDropServer(wss); // Initiate our signaling
