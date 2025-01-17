@@ -1,18 +1,23 @@
-// server.js
 import process from 'process';
 import express from 'express';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import parser from 'ua-parser-js';
 
-// Word lists for generating random display names (expanded)
+/*************************************************************
+ * server.js
+ *  - Maintains peer discovery in "rooms" by IP
+ *  - Relays messages between peers
+ *  - Generates a random display name from ID
+ *************************************************************/
+
+// Word lists for generating random display names
 const adjectivesList = [
   'Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver',
   'Crystal', 'Cosmic', 'Electric', 'Mystic', 'Shadow', 'Radiant',
   'Midnight', 'Solar', 'Lunar', 'Cobalt', 'Verdant', 'Scarlet',
   'Azure', 'Thunder'
 ];
-
 const nounsList = [
   'Wolf', 'Eagle', 'Lion', 'Phoenix', 'Dragon', 'Tiger',
   'Falcon', 'Panther', 'Hawk', 'Bear', 'Serpent', 'Leopard',
@@ -119,7 +124,7 @@ class FileDropServer {
       case 'introduce':
         // The client told us its device type
         sender.name.type = parsed.name.deviceType;
-        // Notify others in the same "room" (same IP) that sender updated
+        // Notify others in the same "room" that sender updated
         this._notifyPeersAboutUpdate(sender);
         // Send the updated peers list to sender
         this._sendPeersList(sender);
@@ -225,7 +230,7 @@ class FileDropServer {
 
   _keepAlive(peer) {
     this._cancelKeepAlive(peer);
-    const timeout = 5000; // Only 5s for faster detection
+    const timeout = 5000; // check every 5 seconds
     if (!peer.lastBeat) {
       peer.lastBeat = Date.now();
     }
@@ -249,7 +254,7 @@ class Peer {
     this.socket = socket;
     this._setIP(request);
     this._setPeerId(request);
-    this.rtcSupported = true; // Assume WebRTC
+    this.rtcSupported = true; // assume WebRTC
     this._setName(request);
     this.timerId = 0;
     this.lastBeat = Date.now();

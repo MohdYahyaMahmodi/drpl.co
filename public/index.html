@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache) -->
-  <link rel="stylesheet" href="styles.css?v=1.0.9" />
+  <link rel="stylesheet" href="styles.css?v=2.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -78,7 +78,7 @@
     </div>
   </div>
 
-  <!-- Info Modal (HIGH z-index so it is always on top) -->
+  <!-- Info Modal (HIGH z-index) -->
   <div
     id="info-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -205,6 +205,40 @@
     </div>
   </div>
 
+  <!-- Choose Action Modal (when clicking a peer) -->
+  <div
+    id="choose-action-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="choose-action-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center"
+    >
+      <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
+      <p class="text-[#333533] mb-6" id="choose-action-device-name">
+        <!-- e.g. "Send to Red Tiger" -->
+      </p>
+      <div class="flex flex-col space-y-4">
+        <button
+          id="choose-action-send-files"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+        >
+          Send Files
+        </button>
+        <button
+          id="choose-action-send-message"
+          class="px-6 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
+        >
+          Send Message
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Incoming Transfer Request Modal -->
   <div
     id="incoming-request-modal"
@@ -220,8 +254,18 @@
         Incoming Transfer
       </h2>
       <p class="text-[#333533] mb-4" id="incoming-request-text">
-        <!-- e.g. "Electric Panther wants to transfer files" -->
+        <!-- e.g. "Electric Panther wants to send files" -->
       </p>
+      <div class="flex items-center space-x-2 mb-4">
+        <input
+          type="checkbox"
+          id="always-accept-checkbox"
+          class="form-checkbox h-5 w-5 text-[#333533]"
+        />
+        <label for="always-accept-checkbox" class="text-[#333533]">
+          Always accept from this device (this session)
+        </label>
+      </div>
       <div class="flex space-x-4 justify-center">
         <button
           id="incoming-decline-button"
@@ -265,7 +309,82 @@
     </div>
   </div>
 
+  <!-- Send Message Modal (on the sender side after accept) -->
+  <div
+    id="send-message-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="send-message-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
+      <h2 class="text-xl font-semibold text-[#242423] mb-4">
+        Send a Message
+      </h2>
+      <textarea
+        id="message-input"
+        rows="4"
+        class="w-full p-2 border border-gray-300 rounded mb-4 focus:outline-none"
+        placeholder="Type your message..."
+      ></textarea>
+      <div class="flex justify-end space-x-4">
+        <button
+          id="send-message-cancel"
+          class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+        >
+          Cancel
+        </button>
+        <button
+          id="send-message-button"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming Message Modal (on the receiver side) -->
+  <div
+    id="incoming-message-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="incoming-message-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2" id="incoming-message-header">
+        <!-- e.g. "Message from Red Tiger" -->
+      </h2>
+      <div
+        id="incoming-message-text"
+        class="mb-4 p-2 border border-gray-300 rounded h-32 overflow-y-auto"
+        style="white-space: pre-wrap;"
+      >
+        <!-- The actual message text goes here -->
+      </div>
+      <div class="flex justify-end space-x-4">
+        <button
+          id="incoming-message-close"
+          class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+        >
+          Close
+        </button>
+        <button
+          id="incoming-message-respond"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+        >
+          Respond Back
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main JS -->
-  <script src="main.js?v=1.0.9"></script>
+  <script src="main.js?v=2.0.0"></script>
 </body>
 </html>
