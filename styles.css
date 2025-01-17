@@ -34,11 +34,11 @@
 }
 
 @keyframes wave {
-  from {
-      transform: rotate(0deg);
+  0% {
+    transform: rotate(0deg);
   }
-  to {
-      transform: rotate(360deg);
+  100% {
+    transform: rotate(360deg);
   }
 }
 
@@ -88,11 +88,7 @@
   transform: scale(0.9);
 }
 
-/* 
-  Additional styling for peer buttons: we want them left-aligned 
-  with an icon for device type. We'll handle the icon in JS, 
-  but here's a little override to ensure text-left, etc.
-*/
+/* Additional styling for peer buttons */
 .peer-button {
   display: flex;
   align-items: center;
