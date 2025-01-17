@@ -1,10 +1,10 @@
 /*************************************************************
  * main.js
- * Implements:
- *  - Discovery and display of peers
- *  - "Choose Action" (Send Files or Send Message)
- *  - Request/Accept/Decline flow with "Always Accept" option
- *  - Send Message + Incoming Message modals
+ * Enhanced:
+ *  - "receiving-status-modal": shows "Waiting for XXX..." 
+ *    on the receiver side after Accept
+ *  - Once the sender actually sends a message, we hide 
+ *    the receiving-status-modal and show the incoming message.
  *************************************************************/
 
 /** 
@@ -96,7 +96,7 @@ class ServerConnection {
         break;
 
       /************************************************
-       * Additional Transfer & Messaging
+       * Transfer & Messaging
        ************************************************/
       case 'transfer-request':
         window.dispatchEvent(new CustomEvent('transfer-request', { detail: msg }));
@@ -130,13 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const peerListElement = document.getElementById('peer-list');
   const noPeersMessage = document.getElementById('no-peers-message');
 
-  // Modals
+  // Choose Action Modal
   const chooseActionModal = document.getElementById('choose-action-modal');
   const chooseActionBackdrop = document.getElementById('choose-action-backdrop');
   const chooseActionDeviceName = document.getElementById('choose-action-device-name');
   const chooseActionSendFilesBtn = document.getElementById('choose-action-send-files');
   const chooseActionSendMessageBtn = document.getElementById('choose-action-send-message');
 
+  // Incoming Request Modal
   const incomingRequestModal = document.getElementById('incoming-request-modal');
   const incomingBackdrop = document.getElementById('incoming-request-backdrop');
   const incomingRequestText = document.getElementById('incoming-request-text');
@@ -144,17 +145,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const incomingAcceptBtn = document.getElementById('incoming-accept-button');
   const alwaysAcceptCheckbox = document.getElementById('always-accept-checkbox');
 
+  // Waiting for Response Modal (sender side)
   const waitingResponseModal = document.getElementById('waiting-response-modal');
   const waitingResponseBackdrop = document.getElementById('waiting-response-backdrop');
   const waitingResponseText = document.getElementById('waiting-response-text');
   const waitingCancelBtn = document.getElementById('waiting-cancel-button');
 
+  // Receiving Status Modal (receiver side)
+  const receivingStatusModal = document.getElementById('receiving-status-modal');
+  const receivingStatusBackdrop = document.getElementById('receiving-status-backdrop');
+  const receivingStatusText = document.getElementById('receiving-status-text');
+
+  // Send Message Modal (sender side)
   const sendMessageModal = document.getElementById('send-message-modal');
   const sendMessageBackdrop = document.getElementById('send-message-backdrop');
   const sendMessageCancel = document.getElementById('send-message-cancel');
   const sendMessageBtn = document.getElementById('send-message-button');
   const messageInput = document.getElementById('message-input');
 
+  // Incoming Message Modal (receiver side)
   const incomingMessageModal = document.getElementById('incoming-message-modal');
   const incomingMessageBackdrop = document.getElementById('incoming-message-backdrop');
   const incomingMessageHeader = document.getElementById('incoming-message-header');
@@ -162,25 +171,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const incomingMessageClose = document.getElementById('incoming-message-close');
   const incomingMessageRespond = document.getElementById('incoming-message-respond');
 
-  // Info & Author modals references
+  // Info & Author Modals
   const infoButton = document.getElementById('info-button');
   const authorButton = document.getElementById('author-button');
   const infoModal = document.getElementById('info-modal');
-  const authorModal = document.getElementById('author-modal');
   const infoModalClose = document.getElementById('info-modal-close');
   const infoModalBackdrop = document.getElementById('info-modal-backdrop');
+  const authorModal = document.getElementById('author-modal');
   const authorModalClose = document.getElementById('author-modal-close');
   const authorModalBackdrop = document.getElementById('author-modal-backdrop');
 
-  // We'll store the ID of the "active peer" we are interacting with
+  // Tracking variables
   let currentRecipientId = null;
   let currentRequesterId = null;
-
-  // We'll store the mode for the current transfer ("files" or "message")
-  let currentMode = null;
-
-  // A map to store "always accept" decisions for this session: { peerId: true/false }
-  const autoAcceptMap = {};
+  let currentMode = null; // "files" or "message"
+  const autoAcceptMap = {}; // { peerId: true/false }
 
   /***********************************************************
    * Update Peer List
@@ -206,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.appendChild(iconEl);
         btn.appendChild(textSpan);
 
-        // Click => show "choose action" modal
         btn.addEventListener('click', () => {
           console.log('[UI] clicked peer => open Choose Action modal for:', peer.name.displayName);
           currentRecipientId = peer.id;
@@ -268,11 +272,11 @@ document.addEventListener('DOMContentLoaded', () => {
   /***********************************************************
    * Transfer Request Flow
    **********************************************************/
-  // 1) SENDER triggers "transfer-request" with a chosen mode
+  // SENDER => initiate request
   function sendTransferRequest(mode) {
     if (!currentRecipientId) return;
     currentMode = mode;
-    // Show "waiting" modal
+
     const peerName = peers[currentRecipientId]?.name?.displayName || 'Unknown';
     waitingResponseText.textContent = `Waiting for ${peerName} to accept...`;
     waitingResponseModal.style.display = 'flex';
@@ -285,36 +289,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 2) RECEIVER sees "transfer-request" event
+  // RECEIVER => handle incoming request
   window.addEventListener('transfer-request', (e) => {
     const msg = e.detail;
-    console.log('[transfer-request] Received from', msg.sender, 'mode=', msg.mode);
+    console.log('[transfer-request] from', msg.sender, 'mode=', msg.mode);
 
     currentRequesterId = msg.sender;
-    currentMode = msg.mode; // "files" or "message"
+    currentMode = msg.mode; 
     const fromName = msg.fromDisplayName || 'Unknown';
 
-    // If we have autoAccept for this sender, skip the request
     if (autoAcceptMap[currentRequesterId]) {
-      // Immediately accept
+      // auto-accept
       serverConnection.send({
         type: 'transfer-accept',
         to: currentRequesterId,
         mode: currentMode
       });
-      // If mode is "files", do nothing special right now
-      // If mode is "message", we wait for them to send the actual message
+      // Show receiving-status-modal right away
+      showReceivingStatus(fromName, currentMode);
       return;
     }
 
-    // Otherwise, show the incoming request modal
+    // Otherwise, show the incoming-request-modal
     incomingRequestText.textContent = `${fromName} wants to send ${currentMode === 'files' ? 'files' : 'a message'}.`;
     incomingRequestModal.style.display = 'flex';
     alwaysAcceptCheckbox.checked = false;
   });
 
-  // 3) ACCEPT or DECLINE
-  // Incoming side => Decline
+  // RECEIVER => Accept or Decline
   incomingDeclineBtn.addEventListener('click', () => {
     if (currentRequesterId) {
       serverConnection.send({
@@ -327,7 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMode = null;
   });
 
-  // Incoming side => Accept
   incomingAcceptBtn.addEventListener('click', () => {
     if (currentRequesterId) {
       if (alwaysAcceptCheckbox.checked) {
@@ -338,26 +339,28 @@ document.addEventListener('DOMContentLoaded', () => {
         to: currentRequesterId,
         mode: currentMode
       });
+
+      // Show "receiving-status-modal" to indicate we are waiting
+      const fromName = peers[currentRequesterId]?.name?.displayName || 'Unknown';
+      showReceivingStatus(fromName, currentMode);
     }
     incomingRequestModal.style.display = 'none';
-
-    // If it's "files", we basically wait for them to send files (not fully implemented)
-    // If it's "message", we also wait for them to send the actual text
+    // We'll remain in receivingStatusModal until the actual message (or file) arrives
     currentRequesterId = null;
   });
 
-  // 4) SENDER sees "transfer-accept" or "transfer-decline"
+  // SENDER => sees accept or decline
   window.addEventListener('transfer-accept', (e) => {
     const msg = e.detail;
     console.log('[transfer-accept] from', msg.sender, 'mode=', msg.mode);
 
-    // The other side accepted, hide waiting modal
     waitingResponseModal.style.display = 'none';
 
     if (msg.mode === 'files') {
       alert('They accepted file transfer! (Not implemented yet.)');
+      // or show your own "Send files" UI.
     } else if (msg.mode === 'message') {
-      // Show the "send message" modal
+      // Show send-message-modal
       sendMessageModal.style.display = 'flex';
     }
   });
@@ -372,16 +375,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /***********************************************************
-   * "Send Message" flow
+   * Receiving Status Modal
    **********************************************************/
-  // Once the receiving side accepted with mode="message", the SENDER sees the "send-message-modal".
-  // SENDER types a message => send "send-message" to the receiver.
+  function showReceivingStatus(senderName, mode) {
+    let typeLabel = (mode === 'files') ? 'files' : 'a message';
+    receivingStatusText.textContent = `Waiting for ${senderName} to send ${typeLabel}...`;
+    receivingStatusModal.style.display = 'flex';
+  }
+  function hideReceivingStatus() {
+    receivingStatusModal.style.display = 'none';
+  }
+
+  receivingStatusBackdrop.addEventListener('click', () => {
+    // If you want, you could hide or have a "Cancel Receiving" button. 
+    // For now, we just keep the user in this state until something arrives.
+  });
+
+  /***********************************************************
+   * "Send Message" flow (SENDER side)
+   **********************************************************/
   sendMessageBtn.addEventListener('click', () => {
     if (!currentRecipientId) return;
     const text = messageInput.value.trim();
     if (!text) return;
 
-    // Send the message to the other peer
     serverConnection.send({
       type: 'send-message',
       to: currentRecipientId,
@@ -389,14 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
       fromName: serverConnection.displayName
     });
 
-    // Close the modal
     sendMessageModal.style.display = 'none';
     messageInput.value = '';
     currentRecipientId = null;
     currentMode = null;
   });
 
-  // Cancel sending the message
   sendMessageCancel.addEventListener('click', () => {
     sendMessageModal.style.display = 'none';
     messageInput.value = '';
@@ -404,39 +419,38 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMode = null;
   });
 
-  // 5) RECEIVER sees "incoming-message"
+  // RECEIVER => sees "incoming-message"
   window.addEventListener('incoming-message', (e) => {
     const msg = e.detail;
     console.log('[incoming-message] from', msg.sender, 'text=', msg.text);
+    
+    // Hide the receiving-status-modal if it's open
+    hideReceivingStatus();
 
     const fromName = msg.fromName || 'Unknown';
     incomingMessageHeader.textContent = `Message from ${fromName}`;
     incomingMessageText.textContent = msg.text || '';
-    // Store the sender in a var so we can respond back
-    currentRequesterId = msg.sender;
+    currentRequesterId = msg.sender; // store so we can respond
+
     incomingMessageModal.style.display = 'flex';
   });
 
-  // Close the incoming message
+  // "Close" or "Respond Back"
   incomingMessageClose.addEventListener('click', () => {
     incomingMessageModal.style.display = 'none';
     currentRequesterId = null;
   });
-
-  // "Respond Back" => Show the "send-message-modal" again in reverse
   incomingMessageRespond.addEventListener('click', () => {
-    // We'll send a message back to whoever just wrote us
-    if (!currentRequesterId) return;
+    // We'll respond back to the same peer
     currentRecipientId = currentRequesterId;
     currentRequesterId = null;
 
-    // Hide the incoming message so user can type
     incomingMessageModal.style.display = 'none';
     sendMessageModal.style.display = 'flex';
   });
 
   /***********************************************************
-   * CHOOSE ACTION MODAL: "Send Files" or "Send Message"
+   * Choose Action Modal
    **********************************************************/
   chooseActionSendFilesBtn.addEventListener('click', () => {
     chooseActionModal.style.display = 'none';
@@ -451,12 +465,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /***********************************************************
-   * WAITING / CANCEL 
+   * Waiting / Cancel
    **********************************************************/
   waitingResponseBackdrop.addEventListener('click', () => {
     waitingResponseModal.style.display = 'none';
     if (currentRecipientId) {
-      // Cancel
+      // Cancel from sender side
       serverConnection.send({
         type: 'transfer-decline',
         to: currentRecipientId
@@ -477,19 +491,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Incoming request backdrop => close
   incomingBackdrop.addEventListener('click', () => {
     incomingRequestModal.style.display = 'none';
   });
 
-  // Send message backdrop => close
   sendMessageBackdrop.addEventListener('click', () => {
     sendMessageModal.style.display = 'none';
     currentRecipientId = null;
     currentMode = null;
   });
 
-  // Incoming message backdrop => close
   incomingMessageBackdrop.addEventListener('click', () => {
     incomingMessageModal.style.display = 'none';
     currentRequesterId = null;

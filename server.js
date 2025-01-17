@@ -25,7 +25,7 @@ const nounsList = [
   'Griffin', 'Octopus'
 ];
 
-// Helper function to generate displayName based on peer ID
+// Helper function: generate displayName from peer ID
 function getDisplayName(id) {
   const hash1 = (id + 'adjective').hashCode();
   const hash2 = (id + 'noun').hashCode();
@@ -47,7 +47,7 @@ Object.defineProperty(String.prototype, 'hashCode', {
   }
 });
 
-// Handle graceful shutdown
+// Graceful shutdown
 process.on('SIGINT', () => {
   console.info('SIGINT Received, exiting...');
   process.exit(0);
@@ -57,14 +57,12 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// Express app
+// Express setup
 const app = express();
-app.use(express.static('public')); // Serve our static files (index.html, main.js, etc.)
+app.use(express.static('public')); // static files in /public
 
-// Create an HTTP server from express
+// HTTP + WebSocket server
 const server = http.createServer(app);
-
-// Create a WebSocket server on top of the same HTTP server
 const wss = new WebSocketServer({ server });
 
 class FileDropServer {
@@ -82,13 +80,24 @@ class FileDropServer {
     console.log('Drpl.co server is running');
   }
 
+  _onHeaders(headers, response) {
+    // If no cookie yet, create a peerId
+    if (!response.headers.cookie || !response.headers.cookie.includes('peerid=')) {
+      response.peerId = Peer.uuid();
+      headers.push(
+        'Set-Cookie: peerid=' + response.peerId + '; SameSite=Strict; Secure'
+      );
+    }
+  }
+
   _onConnection(peer) {
     this._joinRoom(peer);
+
     peer.socket.on('message', (msg) => this._onMessage(peer, msg));
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // Immediately send them their displayName
+    // Immediately tell them their displayName
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -98,35 +107,22 @@ class FileDropServer {
       }
     });
 
-    // Start keep-alive checks
     this._keepAlive(peer);
   }
 
-  _onHeaders(headers, response) {
-    // If no cookie yet, give them a peerId
-    if (!response.headers.cookie || !response.headers.cookie.includes('peerid=')) {
-      response.peerId = Peer.uuid();
-      headers.push(
-        'Set-Cookie: peerid=' + response.peerId + '; SameSite=Strict; Secure'
-      );
-    }
-  }
-
-  _onMessage(sender, message) {
-    let parsed;
+  _onMessage(sender, data) {
+    let msg;
     try {
-      parsed = JSON.parse(message);
+      msg = JSON.parse(data);
     } catch (e) {
       return;
     }
 
-    switch (parsed.type) {
+    switch (msg.type) {
       case 'introduce':
         // The client told us its device type
-        sender.name.type = parsed.name.deviceType;
-        // Notify others in the same "room" that sender updated
+        sender.name.type = msg.name.deviceType;
         this._notifyPeersAboutUpdate(sender);
-        // Send the updated peers list to sender
         this._sendPeersList(sender);
         break;
 
@@ -139,14 +135,13 @@ class FileDropServer {
         break;
 
       default:
-        // If there's a "to" field, relay to that peer
-        if (parsed.to && this._rooms[sender.ip]) {
-          const recipientId = parsed.to;
-          const recipient = this._rooms[sender.ip][recipientId];
+        // Relay if there's a "to" field
+        if (msg.to && this._rooms[sender.ip]) {
+          const recipient = this._rooms[sender.ip][msg.to];
           if (!recipient) return;
-          delete parsed.to;
-          parsed.sender = sender.id;
-          this._send(recipient, parsed);
+          delete msg.to;
+          msg.sender = sender.id;
+          this._send(recipient, msg);
         }
         break;
     }
@@ -156,27 +151,24 @@ class FileDropServer {
     if (!this._rooms[peer.ip]) {
       this._rooms[peer.ip] = {};
     }
-
-    // Notify existing peers that a new peer joined
-    for (const otherPeerId in this._rooms[peer.ip]) {
-      const otherPeer = this._rooms[peer.ip][otherPeerId];
-      this._send(otherPeer, {
+    // Notify existing peers
+    for (const otherId in this._rooms[peer.ip]) {
+      this._send(this._rooms[peer.ip][otherId], {
         type: 'peer-joined',
         peer: peer.getInfo()
       });
     }
-
-    // Send existing peers to the new peer
+    // Send peers to newly joined
     this._sendPeersList(peer);
 
-    // Add them
+    // Add to the room
     this._rooms[peer.ip][peer.id] = peer;
   }
 
   _leaveRoom(peer) {
     if (!this._rooms[peer.ip] || !this._rooms[peer.ip][peer.id]) return;
 
-    this._cancelKeepAlive(this._rooms[peer.ip][peer.id]);
+    this._cancelKeepAlive(peer);
     delete this._rooms[peer.ip][peer.id];
     peer.socket.terminate();
 
@@ -184,9 +176,8 @@ class FileDropServer {
       delete this._rooms[peer.ip];
     } else {
       // Notify others that this peer left
-      for (const otherPeerId in this._rooms[peer.ip]) {
-        const otherPeer = this._rooms[peer.ip][otherPeerId];
-        this._send(otherPeer, {
+      for (const otherId in this._rooms[peer.ip]) {
+        this._send(this._rooms[peer.ip][otherId], {
           type: 'peer-left',
           peerId: peer.id
         });
@@ -194,25 +185,25 @@ class FileDropServer {
     }
   }
 
-  _notifyPeersAboutUpdate(sender) {
-    const peersInRoom = this._rooms[sender.ip];
-    if (!peersInRoom) return;
-    for (const pid in peersInRoom) {
-      if (pid !== sender.id) {
-        this._send(peersInRoom[pid], {
+  _notifyPeersAboutUpdate(peer) {
+    const room = this._rooms[peer.ip];
+    if (!room) return;
+    for (const pid in room) {
+      if (pid !== peer.id) {
+        this._send(room[pid], {
           type: 'peer-updated',
-          peer: sender.getInfo()
+          peer: peer.getInfo()
         });
       }
     }
   }
 
   _sendPeersList(peer) {
-    const peersInRoom = this._rooms[peer.ip];
+    const room = this._rooms[peer.ip];
     const others = [];
-    for (const pId in peersInRoom) {
-      if (pId !== peer.id) {
-        others.push(peersInRoom[pId].getInfo());
+    for (const pid in room) {
+      if (pid !== peer.id) {
+        others.push(room[pid].getInfo());
       }
     }
     this._send(peer, {
@@ -221,16 +212,9 @@ class FileDropServer {
     });
   }
 
-  _send(peer, message) {
-    if (!peer || peer.socket.readyState !== WebSocket.OPEN) return;
-    peer.socket.send(JSON.stringify(message), (err) => {
-      if (err) console.error('[FileDropServer] Error sending message:', err);
-    });
-  }
-
   _keepAlive(peer) {
     this._cancelKeepAlive(peer);
-    const timeout = 5000; // check every 5 seconds
+    const timeout = 5000;
     if (!peer.lastBeat) {
       peer.lastBeat = Date.now();
     }
@@ -247,6 +231,12 @@ class FileDropServer {
       clearTimeout(peer.timerId);
     }
   }
+
+  _send(peer, msg) {
+    if (peer.socket.readyState === WebSocket.OPEN) {
+      peer.socket.send(JSON.stringify(msg));
+    }
+  }
 }
 
 class Peer {
@@ -254,8 +244,8 @@ class Peer {
     this.socket = socket;
     this._setIP(request);
     this._setPeerId(request);
-    this.rtcSupported = true; // assume WebRTC
     this._setName(request);
+    this.rtcSupported = true;
     this.timerId = 0;
     this.lastBeat = Date.now();
   }
@@ -288,7 +278,6 @@ class Peer {
   _setName(request) {
     const ua = parser(request.headers['user-agent']);
     let deviceName = '';
-
     if (ua.os && ua.os.name) {
       deviceName = ua.os.name.replace('Mac OS', 'Mac') + ' ';
     }

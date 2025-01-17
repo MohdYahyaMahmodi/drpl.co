@@ -14,8 +14,8 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   />
 
-  <!-- Custom CSS (with version for cache) -->
-  <link rel="stylesheet" href="styles.css?v=2.0.0" />
+  <!-- Custom CSS (with version for cache-busting) -->
+  <link rel="stylesheet" href="styles.css?v=3.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -78,7 +78,7 @@
     </div>
   </div>
 
-  <!-- Info Modal (HIGH z-index) -->
+  <!-- Info Modal -->
   <div
     id="info-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -112,8 +112,8 @@
           <ul class="list-disc pl-6 space-y-2">
             <li>Open Drpl.co on both devices</li>
             <li>Select the receiving device</li>
-            <li>Choose files to send</li>
-            <li>Files are transferred directly and securely</li>
+            <li>Choose files to send or send a message</li>
+            <li>Transfer is done directly and securely</li>
           </ul>
         </div>
 
@@ -205,7 +205,7 @@
     </div>
   </div>
 
-  <!-- Choose Action Modal (when clicking a peer) -->
+  <!-- Choose Action Modal -->
   <div
     id="choose-action-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -220,7 +220,7 @@
     >
       <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
       <p class="text-[#333533] mb-6" id="choose-action-device-name">
-        <!-- e.g. "Send to Red Tiger" -->
+        <!-- e.g. "Send to Mystic Serpent" -->
       </p>
       <div class="flex flex-col space-y-4">
         <button
@@ -283,7 +283,7 @@
     </div>
   </div>
 
-  <!-- Waiting for Response Modal (on the sender side) -->
+  <!-- Waiting for Response Modal (sender side) -->
   <div
     id="waiting-response-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -309,7 +309,28 @@
     </div>
   </div>
 
-  <!-- Send Message Modal (on the sender side after accept) -->
+  <!-- Receiving Status Modal (receiver side) -->
+  <div
+    id="receiving-status-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="receiving-status-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div
+      class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center flex flex-col items-center justify-center"
+    >
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">Waiting for Sender</h2>
+      <p class="text-[#333533] opacity-75 mb-4" id="receiving-status-text">
+        <!-- e.g. "Waiting for Mystic Serpent to send a message..." -->
+      </p>
+      <!-- (Optional: "Cancel" button if we want to abort receiving) -->
+    </div>
+  </div>
+
+  <!-- Send Message Modal (sender side after accept) -->
   <div
     id="send-message-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -346,7 +367,7 @@
     </div>
   </div>
 
-  <!-- Incoming Message Modal (on the receiver side) -->
+  <!-- Incoming Message Modal (receiver side) -->
   <div
     id="incoming-message-modal"
     class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -385,6 +406,6 @@
   </div>
 
   <!-- Main JS -->
-  <script src="main.js?v=2.0.0"></script>
+  <script src="main.js?v=3.0.0"></script>
 </body>
 </html>
