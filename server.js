@@ -9,6 +9,7 @@ import parser from 'ua-parser-js';
  *  - Maintains peer discovery in "rooms" by IP
  *  - Relays messages (transfer-request, file-chunk, etc.)
  *  - Generates a random display name from ID
+ *  - Keep-alive now extended so big file transfers are not cut.
  *************************************************************/
 
 // Word lists for generating random display names
@@ -208,9 +209,14 @@ class FileDropServer {
     });
   }
 
+  /**
+   * Extend the keep-alive interval so large transfers are not cut off.
+   */
   _keepAlive(peer) {
     this._cancelKeepAlive(peer);
-    const timeout = 5000;
+    // Increased from 5s to 60s
+    const timeout = 60 * 1000; // 1 minute
+    // We allow 2 * timeout (2 minutes) of no "pong" before dropping
     if (!peer.lastBeat) {
       peer.lastBeat = Date.now();
     }
@@ -241,7 +247,7 @@ class Peer {
     this._setIP(request);
     this._setPeerId(request);
     this._setName(request);
-    this.rtcSupported = true; // Not using RTC in this example, but we keep a flag
+    this.rtcSupported = true; // Potentially used if you integrate WebRTC
     this.timerId = 0;
     this.lastBeat = Date.now();
   }

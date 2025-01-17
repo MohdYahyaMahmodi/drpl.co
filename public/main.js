@@ -7,6 +7,7 @@
  *  - Chunk-based file sending over WebSockets
  *  - Progress bars for receiving
  *  - Slideshow preview and downloads
+ *  - Extended keep-alive; reduced chunk size for large files
  *************************************************************/
 
 function detectDeviceType() {
@@ -145,6 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const deviceType = detectDeviceType();
   const serverConnection = new ServerConnection(deviceType);
+
+  // TODO: [Optional] Implement WebRTC data channels here if you wish.
+  // This would involve exchanging offers/answers/ICE candidates over
+  // the serverConnection and then using the data channel to transfer
+  // large files directly (LAN peer-to-peer).
 
   // Grab references to modals/elements
   const peerListElement = document.getElementById('peer-list');
@@ -592,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMode = null;
   });
 
-  // receivingStatusBackdrop => (no immediate action, or you could implement a "Cancel receiving"?)
+  // receivingStatusBackdrop => (Optionally implement a “Cancel receiving”?)
 
   // If the user clicks the black backdrop on the send-message modal => cancel
   sendMessageBackdrop.addEventListener('click', () => {
@@ -702,7 +708,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start sending each file in turn
     // 1) We'll send a "file-transfer-init" to let receiver know how many files total
-    const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
     serverConnection.send({
       type: 'file-transfer-init',
       totalFiles: selectedFiles.length,
@@ -711,7 +716,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Then read & send files sequentially
     sendFilesModal.style.display = 'none';
-    // We'll show some local UI if you like, but for now let's rely on the receiver’s progress
     sendNextFile(0);
   });
 
@@ -730,7 +734,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const reader = new FileReader();
     reader.onload = () => {
       const buffer = new Uint8Array(reader.result);
-      const chunkSize = 64 * 1024; // 64KB
+      // Use smaller chunk size for better stability over WS
+      const chunkSize = 32 * 1024; // 32KB
       let offset = 0;
 
       function sendChunk() {
@@ -759,7 +764,8 @@ document.addEventListener('DOMContentLoaded', () => {
           to: currentRecipientId
         });
 
-        setTimeout(sendChunk, 0); // asynchronously schedule next chunk
+        // Slight async pause to avoid saturating buffers
+        setTimeout(sendChunk, 5);
       }
 
       // Start sending the first chunk
@@ -791,13 +797,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('file-chunk', (e) => {
     const msg = e.detail;
-    // if we haven't seen this file yet, add it to receivingFiles
+    // if we haven't seen this file yet, add it to receivingFilesInfo
     let fileInfo = receivingFilesInfo.find(f => f.name === msg.fileName);
     if (!fileInfo) {
       fileInfo = {
         name: msg.fileName,
         size: msg.fileSize || 0,
-        chunks: [], // store as array of Uint8Array
+        chunks: [],
         progressBar: null,
         receivedBytes: 0
       };

@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache-busting) -->
-  <link rel="stylesheet" href="styles.css?v=5.0.2" />
+  <link rel="stylesheet" href="styles.css?v=5.0.3" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -213,7 +213,10 @@
       class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center"
     >
       <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
-      <p class="text-[#333533] mb-6" id="choose-action-device-name"></p>
+      <p class="text-[#333533] mb-1" id="choose-action-device-name"></p>
+      <p class="text-[#333533] text-sm opacity-75 mb-4">
+        (You can easily send a few hundred MB of files!)
+      </p>
       <div class="flex flex-col space-y-4">
         <button
           id="choose-action-send-files"
@@ -575,40 +578,45 @@
       >
         <!-- Slideshow area: we'll dynamically fill it -->
       </div>
-      <div class="flex justify-between items-center mt-4">
-        <div>
-          <button
-            id="prev-file-btn"
-            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
-          >
-            <i class="fas fa-chevron-left"></i>
-          </button>
-          <button
-            id="next-file-btn"
-            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] ml-2"
-          >
-            <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-        <div>
+
+      <!-- Updated layout for the nav & download buttons -->
+      <div class="flex items-center justify-between mt-4 flex-wrap gap-2">
+        <!-- LEFT: Previous arrow -->
+        <button
+          id="prev-file-btn"
+          class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+
+        <!-- MIDDLE: Download buttons -->
+        <div class="flex items-center justify-center gap-2 flex-wrap">
           <button
             id="download-current-file"
-            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423]"
+            class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
           >
             Download
           </button>
           <button
             id="download-all-files"
-            class="px-4 py-2 ml-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+            class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] text-sm sm:text-base"
           >
             Download All
           </button>
         </div>
+
+        <!-- RIGHT: Next arrow -->
+        <button
+          id="next-file-btn"
+          class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Main JS -->
-  <script src="main.js?v=5.0.2"></script>
+  <script src="main.js?v=5.0.3"></script>
 </body>
 </html>
