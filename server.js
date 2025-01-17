@@ -7,7 +7,7 @@ import parser from 'ua-parser-js';
 /*************************************************************
  * server.js
  *  - Maintains peer discovery in "rooms" by IP
- *  - Relays messages (transfer-request, transfer-cancel, etc.)
+ *  - Relays messages (transfer-request, file-chunk, etc.)
  *  - Generates a random display name from ID
  *************************************************************/
 
@@ -56,7 +56,7 @@ process.on('SIGTERM', () => {
 });
 
 const app = express();
-app.use(express.static('public')); // Serve static files
+app.use(express.static('public')); // Serve static files in /public
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -93,7 +93,7 @@ class FileDropServer {
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // Send displayName
+    // Send them their displayName
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -130,7 +130,7 @@ class FileDropServer {
         break;
 
       default:
-        // Relay if there's a "to" field
+        // If there's a "to", we relay
         if (msg.to && this._rooms[sender.ip]) {
           const recipient = this._rooms[sender.ip][msg.to];
           if (!recipient) return;
@@ -153,7 +153,9 @@ class FileDropServer {
         peer: peer.getInfo()
       });
     }
+    // Send the new peer the list of existing peers
     this._sendPeersList(peer);
+
     this._rooms[peer.ip][peer.id] = peer;
   }
 
@@ -222,7 +224,7 @@ class FileDropServer {
   }
 
   _send(peer, msg) {
-    if (peer.socket.readyState === 1) {
+    if (peer.socket.readyState === WebSocket.OPEN) {
       peer.socket.send(JSON.stringify(msg));
     }
   }

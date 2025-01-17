@@ -67,7 +67,10 @@
 #incoming-message-modal,
 #transfer-complete-modal,
 #peer-lost-modal,
-#server-disconnected-modal {
+#server-disconnected-modal,
+#send-files-modal,
+#receiving-files-modal,
+#file-preview-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -81,7 +84,10 @@
 #incoming-message-modal[style*="display: flex"],
 #transfer-complete-modal[style*="display: flex"],
 #peer-lost-modal[style*="display: flex"],
-#server-disconnected-modal[style*="display: flex"] {
+#server-disconnected-modal[style*="display: flex"],
+#send-files-modal[style*="display: flex"],
+#receiving-files-modal[style*="display: flex"],
+#file-preview-modal[style*="display: flex"] {
   opacity: 1;
   transform: scale(1);
 }
@@ -96,7 +102,10 @@
 #incoming-message-modal[style*="display: none"],
 #transfer-complete-modal[style*="display: none"],
 #peer-lost-modal[style*="display: none"],
-#server-disconnected-modal[style*="display: none"] {
+#server-disconnected-modal[style*="display: none"],
+#send-files-modal[style*="display: none"],
+#receiving-files-modal[style*="display: none"],
+#file-preview-modal[style*="display: none"] {
   opacity: 0;
   transform: scale(0.9);
 }
@@ -113,4 +122,23 @@
 
 .peer-device-icon {
   font-size: 1.2rem;
+}
+
+/* Additional styling for file list */
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.file-item .file-name {
+  font-size: 0.9rem;
+  color: #333;
+}
+.file-item i {
+  cursor: pointer;
+  color: #555;
+}
+.file-item i:hover {
+  color: #000;
 }
