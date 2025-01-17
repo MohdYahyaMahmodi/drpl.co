@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
       peerIds.forEach((pid) => {
         const peer = peers[pid];
 
-        // bigger top/bottom padding and bigger font
+        // each device row, with spacing
         const btn = document.createElement('button');
         btn.className = 'peer-button w-full py-[15px] text-xl bg-[#333533] text-white rounded-lg hover:bg-[#242423] transition-colors';
 

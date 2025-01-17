@@ -46,16 +46,13 @@
 ::-webkit-scrollbar {
   width: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: #ffffff;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #333533;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #242423;
 }
@@ -69,6 +66,7 @@
 #file-preview-modal {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
+
 #info-modal[style*="display: flex"],
 #author-modal[style*="display: flex"],
 #file-transfer-modal[style*="display: flex"],
@@ -78,6 +76,7 @@
   opacity: 1;
   transform: scale(1);
 }
+
 #info-modal[style*="display: none"],
 #author-modal[style*="display: none"],
 #file-transfer-modal[style*="display: none"],

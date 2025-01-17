@@ -17,10 +17,6 @@
   <!-- Custom CSS (with version for cache) -->
   <link rel="stylesheet" href="styles.css?v=1.0.3" />
 </head>
-<!-- 
-  1) Make the body fill the viewport height (h-screen)
-  2) Prevent scrolling on the entire body (overflow-hidden)
--->
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
   <div class="wave-container">
@@ -45,26 +41,26 @@
     </button>
   </div>
 
-  <!-- Main Content (full height, flex column) -->
-  <div class="relative z-10 h-full flex flex-col">
-    <!-- Center Content (grows, but no scroll on entire page) -->
+  <!-- Main Content -->
+  <!-- Give it a lower z-index so modals can be on top -->
+  <div class="relative z-0 h-full flex flex-col">
+    <!-- Center Content -->
     <div class="flex-1 flex items-center justify-center px-4">
       <div class="text-center w-full max-w-md">
-        <!-- 
-          We'll wrap the peer list in a separate scroll container. 
-          'max-h-[50vh]' means it can take up to 50% of viewport 
-          before scrolling. Adjust as desired.
-        -->
         <p
           id="no-peers-message"
           class="text-xl text-[#333533]"
         >
           Open Drpl.co on your other device to get started
         </p>
-
+        <!-- 
+          A container that can scroll if there's too many peers.
+          max-h-[300px] => about 300px tall, then scroll
+          space-y-2 => add spacing between device rows
+        -->
         <div
           id="scroll-container"
-          class="mt-6 overflow-y-auto max-h-[50vh] space-y-4"
+          class="mt-6 max-h-[300px] overflow-y-auto space-y-2"
         >
           <div id="peer-list">
             <!-- Peer list will be dynamically generated -->
@@ -73,7 +69,7 @@
       </div>
     </div>
 
-    <!-- Bottom Content (static at bottom) -->
+    <!-- Bottom Content -->
     <div class="p-8 text-center">
       <img src="logo.svg" alt="Drpl.co" class="w-16 mx-auto mb-4" />
       <p class="text-[#333533] mb-2">
@@ -86,10 +82,10 @@
     </div>
   </div>
 
-  <!-- Info Modal -->
+  <!-- Info Modal (HIGH z-index so it is always on top of the main content) -->
   <div
     id="info-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
     <!-- Backdrop -->
@@ -150,10 +146,10 @@
     </div>
   </div>
 
-  <!-- Author Modal -->
+  <!-- Author Modal (HIGH z-index as well) -->
   <div
     id="author-modal"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
     style="display: none;"
   >
     <!-- Backdrop -->
