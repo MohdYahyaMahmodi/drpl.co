@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache) -->
-  <link rel="stylesheet" href="styles.css?v=1.0.4" />
+  <link rel="stylesheet" href="styles.css?v=1.0.5" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -56,13 +56,16 @@
         <!-- 
           A container that can scroll if there's too many peers.
           max-h-[300px] => about 300px tall, then scroll
-          space-y-2 => add spacing between device rows
         -->
         <div
           id="scroll-container"
-          class="mt-6 max-h-[300px] overflow-y-auto space-y-2"
+          class="mt-6 max-h-[300px] overflow-y-auto"
         >
-          <div id="peer-list">
+          <!-- 
+            The peer-list container has space-y-[10px] 
+            so each button gets a 10px gap underneath it.
+          -->
+          <div id="peer-list" class="flex flex-col space-y-[10px]">
             <!-- Peer list will be dynamically generated -->
           </div>
         </div>
@@ -223,6 +226,6 @@
   <!-- (All other modals: file-transfer, progress, etc. remain, but are unused for now) -->
 
   <!-- Main JS (with version for cache) -->
-  <script src="main.js?v=1.0.4"></script>
+  <script src="main.js?v=1.0.5"></script>
 </body>
 </html>

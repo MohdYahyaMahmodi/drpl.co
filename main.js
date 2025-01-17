@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
       noPeersMessage.style.display = 'block';
     } else {
       noPeersMessage.style.display = 'none';
+
       peerIds.forEach((pid) => {
         const peer = peers[pid];
 
@@ -164,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const textSpan = document.createElement('span');
         textSpan.textContent = peer.name.displayName;
 
+        // Assemble
         btn.appendChild(iconEl);
         btn.appendChild(textSpan);
 
