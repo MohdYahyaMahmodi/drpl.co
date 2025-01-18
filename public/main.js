@@ -3,7 +3,7 @@
  *
  * Major Updates:
  *  1) closeAllModals() to ensure old modals hide before showing a new one
- *  2) Fix message send bug after "Respond Back" by reusing the same event
+ *  2) Fix "Respond Back" bug by storing the fromId in currentRecipientId
  *  3) Add "batch-header" for multi-file receiving with "File X of Y"
  *  4) Add console logs for chunk sending & receiving
  *  5) Add a simple buffer check to avoid saturating the data channel
@@ -282,26 +282,16 @@ class PeersManager {
       incModal.style.display = 'none';
       if (autoChk.checked) peerObj.autoAccept = true;
       console.log('[transfer-request] user accepted from', fromName);
-      Evt.off('click-accept', handleAccept);
-      Evt.off('click-decline', handleDecline);
 
       // show receiving status
       document.getElementById('receiving-status-text').textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
       document.getElementById('receiving-status-modal').style.display = 'flex';
 
-      // Send accept
       peerObj.autoAccept = autoChk.checked;
-      setTimeout(() => {
-        // short delay to ensure UI is up
-        console.log('[transfer-request] sending transfer-accept to', fromName);
-        Evt.fire('transfer-accept-local', { fromId, mode: msg.mode }); // local event if you want
-        // or just do server
-        peerObj.autoAccept = autoChk.checked;
-        autoChk.checked = false;
-        Evt.off('click-accept', handleAccept);
-        Evt.off('click-decline', handleDecline);
+      autoChk.checked = false;
 
-        // do actual server send
+      // Send accept
+      setTimeout(() => {
         this.server.send({
           type: 'transfer-accept',
           to: fromId,
@@ -313,12 +303,10 @@ class PeersManager {
     function handleDecline() {
       console.log('[transfer-request] user declined from', fromName);
       incModal.style.display = 'none';
-      Evt.off('click-accept', handleAccept);
-      Evt.off('click-decline', handleDecline);
       autoChk.checked = false;
       this.server.send({ type: 'transfer-decline', to: fromId });
     }
-    // Because we keep re-assigning these, let's do them once
+
     acceptBtn.onclick = handleAccept.bind(this);
     declineBtn.onclick = handleDecline.bind(this);
   }
@@ -651,6 +639,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[rtc-data text] from', fromId, ' =>', obj);
         const decoded = decodeURIComponent(escape(atob(obj.text)));
         closeAllModals();
+
+        // *** IMPORTANT FIX: set currentRecipientId = fromId 
+        // so "Respond Back" knows who to send to
+        window.currentRecipientId = fromId;
+
         document.getElementById('incoming-message-header').textContent =
           `Message from ${peersMgr.peers[fromId]?.info.name.displayName || 'Unknown'}`;
         document.getElementById('incoming-message-text').textContent = decoded;
@@ -671,6 +664,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('incoming-message-respond').onclick = () => {
     closeAllModals();
+
+    // Now that we set currentRecipientId when we receive a message,
+    // we can open the send-message-modal to respond to that same ID
     document.getElementById('send-message-modal').style.display = 'flex';
   };
 
@@ -753,7 +749,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[send-files] starting transfer to', currentRecipientId);
     closeAllModals();
 
-    // We'll chunk the files over the datachannel
     const rtpw = peersMgr.ensureRTCPeer(currentRecipientId, true);
 
     // 0) send a "batch-header" so receiver knows how many files total
@@ -778,7 +773,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const chunkSize = 65536;
       let offset = 0;
       while (offset < file.size) {
-        // check data channel buffer
         const slice = file.slice(offset, offset + chunkSize);
         const buffer = await slice.arrayBuffer();
         offset += buffer.byteLength;
