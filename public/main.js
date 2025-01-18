@@ -1,11 +1,12 @@
 /*************************************************************
  * main.js
  *
- * Major Features:
- *  - Shows each peer by codename (e.g. "Green Tiger")
- *  - WebSocket: discover peers, send "transfer-request" 
- *  - Upon accept, we do a WebRTC data channel for actual file transfer
- *  - The existing "Incoming Transfer" modals now work properly
+ * Major Updates:
+ *  1) closeAllModals() to ensure old modals hide before showing a new one
+ *  2) Fix message send bug after "Respond Back" by reusing the same event
+ *  3) Add "batch-header" for multi-file receiving with "File X of Y"
+ *  4) Add console logs for chunk sending & receiving
+ *  5) Add a simple buffer check to avoid saturating the data channel
  *************************************************************/
 
 // A small event bus
@@ -148,7 +149,6 @@ class PeersManager {
   }
 
   _onPeersList(peersArr) {
-    // peersArr => array of { id, name { displayName, ...}, rtcSupported }
     peersArr.forEach((p) => {
       this.peers[p.id] = {
         info: p,
@@ -203,19 +203,17 @@ class PeersManager {
       const iconEl = document.createElement('i');
       iconEl.classList.add('fas', 'fa-desktop', 'peer-device-icon', 'text-white');
       const textSpan = document.createElement('span');
-      // show the codename from p.info.name.displayName
       textSpan.textContent = p.info.name.displayName;
 
       btn.appendChild(iconEl);
       btn.appendChild(textSpan);
 
       btn.addEventListener('click', () => {
-        // open "choose action" modal
         window.currentRecipientId = p.info.id;
-        const modal = document.getElementById('choose-action-modal');
+        closeAllModals();
         document.getElementById('choose-action-device-name').textContent =
           'Send to ' + p.info.name.displayName;
-        modal.style.display = 'flex';
+        document.getElementById('choose-action-modal').style.display = 'flex';
       });
 
       peerListElement.appendChild(btn);
@@ -227,7 +225,6 @@ class PeersManager {
     const fromId = msg.sender;
     let peerObj = this.peers[fromId];
     if (!peerObj) {
-      // create
       peerObj = {
         info: { id: fromId, name: { displayName: '??' } },
         rtp: null,
@@ -245,7 +242,6 @@ class PeersManager {
    * The "transfer-request" flow
    *********************************************************/
   _onTransferRequest(msg) {
-    // receiving side => show "Incoming Transfer" unless autoAccept is set
     const fromId = msg.sender;
     let peerObj = this.peers[fromId];
     if (!peerObj) {
@@ -259,67 +255,77 @@ class PeersManager {
     const fromName = peerObj.info.name?.displayName || 'Unknown';
 
     if (peerObj.autoAccept) {
-      // auto-accept
+      console.log('[transfer-request] auto-accept for', fromName);
       this.server.send({
         type: 'transfer-accept',
         to: fromId,
         mode: msg.mode
       });
-      // show "receiving-status-modal"
-      document.getElementById('incoming-request-modal').style.display = 'none';
-      const statModal = document.getElementById('receiving-status-modal');
-      const statText = document.getElementById('receiving-status-text');
-      statText.textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
-      statModal.style.display = 'flex';
+      closeAllModals();
+      document.getElementById('receiving-status-text').textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
+      document.getElementById('receiving-status-modal').style.display = 'flex';
       return;
     }
 
-    // show "incoming-request-modal"
+    console.log('[transfer-request] from', fromName, 'mode=', msg.mode);
+    closeAllModals();
     const incModal = document.getElementById('incoming-request-modal');
     const incText = document.getElementById('incoming-request-text');
     incText.textContent = `${fromName} wants to send ${msg.mode === 'files' ? 'files' : 'a message'}.`;
     incModal.style.display = 'flex';
 
-    // Accept or decline
     const acceptBtn = document.getElementById('incoming-accept-button');
     const declineBtn = document.getElementById('incoming-decline-button');
     const autoChk = document.getElementById('always-accept-checkbox');
 
-    const handleAccept = () => {
+    function handleAccept() {
       incModal.style.display = 'none';
       if (autoChk.checked) peerObj.autoAccept = true;
+      console.log('[transfer-request] user accepted from', fromName);
+      Evt.off('click-accept', handleAccept);
+      Evt.off('click-decline', handleDecline);
 
-      this.server.send({
-        type: 'transfer-accept',
-        to: fromId,
-        mode: msg.mode
-      });
-      // show "receiving-status-modal"
-      const statModal = document.getElementById('receiving-status-modal');
-      const statText = document.getElementById('receiving-status-text');
-      statText.textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
-      statModal.style.display = 'flex';
+      // show receiving status
+      document.getElementById('receiving-status-text').textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
+      document.getElementById('receiving-status-modal').style.display = 'flex';
 
-      acceptBtn.removeEventListener('click', handleAccept);
-      declineBtn.removeEventListener('click', handleDecline);
-    };
+      // Send accept
+      peerObj.autoAccept = autoChk.checked;
+      setTimeout(() => {
+        // short delay to ensure UI is up
+        console.log('[transfer-request] sending transfer-accept to', fromName);
+        Evt.fire('transfer-accept-local', { fromId, mode: msg.mode }); // local event if you want
+        // or just do server
+        peerObj.autoAccept = autoChk.checked;
+        autoChk.checked = false;
+        Evt.off('click-accept', handleAccept);
+        Evt.off('click-decline', handleDecline);
 
-    const handleDecline = () => {
+        // do actual server send
+        this.server.send({
+          type: 'transfer-accept',
+          to: fromId,
+          mode: msg.mode
+        });
+      }, 100);
+    }
+
+    function handleDecline() {
+      console.log('[transfer-request] user declined from', fromName);
       incModal.style.display = 'none';
-      this.server.send({
-        type: 'transfer-decline',
-        to: fromId
-      });
-      acceptBtn.removeEventListener('click', handleAccept);
-      declineBtn.removeEventListener('click', handleDecline);
-    };
-
-    acceptBtn.addEventListener('click', handleAccept);
-    declineBtn.addEventListener('click', handleDecline);
+      Evt.off('click-accept', handleAccept);
+      Evt.off('click-decline', handleDecline);
+      autoChk.checked = false;
+      this.server.send({ type: 'transfer-decline', to: fromId });
+    }
+    // Because we keep re-assigning these, let's do them once
+    acceptBtn.onclick = handleAccept.bind(this);
+    declineBtn.onclick = handleDecline.bind(this);
   }
 
   _onTransferAccept(msg) {
-    // sender side => hide "waiting-response-modal", open RTCPeer
+    // sender side => hide "waiting-response-modal"
+    closeAllModals();
     const fromId = msg.sender;
     const mode = msg.mode;
     let peerObj = this.peers[fromId];
@@ -331,49 +337,34 @@ class PeersManager {
       };
       this.peers[fromId] = peerObj;
     }
-    document.getElementById('waiting-response-modal').style.display = 'none';
+    console.log('[transfer-accept] from', peerObj.info.name.displayName, 'mode=', mode);
 
-    // create the RTCPeer if not existing
     if (!peerObj.rtp) {
       peerObj.rtp = new RTCPeerConnectionWrapper(this.server, fromId, true);
     }
 
     if (mode === 'files') {
-      // show "send-files-modal"
       document.getElementById('send-files-modal').style.display = 'flex';
     } else if (mode === 'message') {
-      // show "send-message-modal"
       document.getElementById('send-message-modal').style.display = 'flex';
     }
   }
 
   _onTransferDecline(msg) {
-    // sender side => hide waiting modal
-    document.getElementById('waiting-response-modal').style.display = 'none';
+    closeAllModals();
     alert('They declined the transfer.');
   }
 
   _onTransferCancel(msg) {
-    // either side => close modals
+    closeAllModals();
     alert('The other device canceled the transfer.');
-    document.getElementById('waiting-response-modal').style.display = 'none';
-    document.getElementById('send-files-modal').style.display = 'none';
-    document.getElementById('send-message-modal').style.display = 'none';
-    document.getElementById('receiving-status-modal').style.display = 'none';
   }
 
-  /*********************************************************
-   * If we see "send-message" directly from the server, that
-   * might be a fallback—but we're using WebRTC. In your code,
-   * you might actually just do "incoming-message" 
-   * if you want a fallback. We'll do minimal handling here.
-   *********************************************************/
+  // fallback or no-op
   _onSendMessage(msg) {
-    // (If you did actual fallback text over WS. 
-    // For pure WebRTC, you can ignore. Or display "Message from X"?)
+    console.log('[send-message fallback? not used]', msg);
   }
 
-  // Helper to retrieve or create an RTCPeerConnection
   ensureRTCPeer(peerId, isCaller) {
     let p = this.peers[peerId];
     if (!p) {
@@ -393,12 +384,10 @@ class PeersManager {
 
 /***********************************************************
  * A thin wrapper that sets up a data channel for file xfers
- * or text messages (like Snapdrop). 
- * We do not open the channel until we actually need it, 
- * or if we are the "caller" we open immediately.
+ * or text messages (like Snapdrop).
  **********************************************************/
 class RTCPeerConnectionWrapper {
-  constructor(server, remoteId, isCaller=false) {
+  constructor(server, remoteId, isCaller = false) {
     this.server = server;
     this.remoteId = remoteId;
     this.pc = null;
@@ -422,7 +411,6 @@ class RTCPeerConnectionWrapper {
     this.pc.onconnectionstatechange = () => {
       console.log('[RTC] connectionState =', this.pc.connectionState);
       if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
-        // Let user know
         document.getElementById('peer-lost-modal').style.display = 'flex';
       }
     };
@@ -444,7 +432,6 @@ class RTCPeerConnectionWrapper {
           });
         });
     } else {
-      // wait for ondatachannel
       this.pc.ondatachannel = (evt) => {
         this.dc = evt.channel;
         this._setupDataChannel(this.dc);
@@ -466,7 +453,6 @@ class RTCPeerConnectionWrapper {
       .setRemoteDescription(desc)
       .then(() => {
         if (desc.type === 'offer') {
-          // create answer
           return this.pc
             .createAnswer()
             .then((ans) => this.pc.setLocalDescription(ans))
@@ -488,7 +474,6 @@ class RTCPeerConnectionWrapper {
       console.log('[RTC] dataChannel open with', this.remoteId);
     };
     dc.onmessage = (evt) => {
-      // The actual file or text chunk
       Evt.fire('rtc-data', { fromId: this.remoteId, data: evt.data });
     };
     dc.onclose = () => {
@@ -496,39 +481,71 @@ class RTCPeerConnectionWrapper {
     };
   }
 
-  sendData(data) {
-    if (this.dc && this.dc.readyState === 'open') {
-      this.dc.send(data);
+  /**
+   * Attempt to safely send data, checking bufferedAmount
+   * so we don't saturate the link
+   */
+  async sendData(data) {
+    if (!this.dc || this.dc.readyState !== 'open') {
+      console.warn('[RTC] Channel not open, cannot send');
+      return;
     }
+    // Wait for bufferedAmount to be below a threshold
+    while (this.dc.bufferedAmount > 1024 * 1024) {
+      // wait
+      console.log('[RTC] bufferedAmount =', this.dc.bufferedAmount, ' waiting...');
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    this.dc.send(data);
   }
 }
 
 /***********************************************************
- * We'll keep the same "transfer-request" approach for 
- * sending files and messages, but the actual bits go 
- * over the data channel in Snapdrop style. 
+ * Close all modals to ensure old ones hide before new open
+ **********************************************************/
+function closeAllModals() {
+  const modals = [
+    'choose-action-modal',
+    'incoming-request-modal',
+    'waiting-response-modal',
+    'receiving-status-modal',
+    'send-message-modal',
+    'incoming-message-modal',
+    'transfer-complete-modal',
+    'peer-lost-modal',
+    'send-files-modal',
+    'receiving-files-modal',
+    'file-preview-modal'
+  ];
+  for (const m of modals) {
+    document.getElementById(m).style.display = 'none';
+  }
+}
+
+/***********************************************************
+ * Main script
  **********************************************************/
 document.addEventListener('DOMContentLoaded', () => {
   const deviceType = detectDeviceType();
   const server = new ServerConnection(deviceType);
   const peersMgr = new PeersManager(server);
 
-  // We'll store some ephemeral states
-  let currentMode = null; // 'files' or 'message'
+  // We'll store ephemeral state
   let currentRecipientId = null;
 
-  // Hook up the "choose action" modal
+  /***********************************************************
+   * "Choose Action" modal
+   **********************************************************/
   const chooseActionModal = document.getElementById('choose-action-modal');
   const chooseActionBackdrop = document.getElementById('choose-action-backdrop');
   const chooseActionSendFilesBtn = document.getElementById('choose-action-send-files');
   const chooseActionSendMsgBtn = document.getElementById('choose-action-send-message');
 
   chooseActionSendFilesBtn.addEventListener('click', () => {
-    chooseActionModal.style.display = 'none';
-    // Send a "transfer-request" for files
+    closeAllModals();
     if (!window.currentRecipientId) return;
     currentRecipientId = window.currentRecipientId;
-    currentMode = 'files';
+    console.log('[choose-action] user chose "Send Files" to', currentRecipientId);
 
     // show "waiting-response-modal"
     document.getElementById('waiting-response-modal').style.display = 'flex';
@@ -545,12 +562,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chooseActionSendMsgBtn.addEventListener('click', () => {
-    chooseActionModal.style.display = 'none';
+    closeAllModals();
     if (!window.currentRecipientId) return;
     currentRecipientId = window.currentRecipientId;
-    currentMode = 'message';
+    console.log('[choose-action] user chose "Send Message" to', currentRecipientId);
 
-    // show "waiting-response-modal"
     document.getElementById('waiting-response-modal').style.display = 'flex';
     const peerName = peersMgr.peers[currentRecipientId]?.info.name.displayName || 'Unknown';
     document.getElementById('waiting-response-text').textContent =
@@ -567,103 +583,100 @@ document.addEventListener('DOMContentLoaded', () => {
     chooseActionModal.style.display = 'none';
   });
 
-  // CANCEL from waiting or backdrop
+  // Cancel from waiting or backdrop
   const waitingRespModal = document.getElementById('waiting-response-modal');
   const waitingCancelBtn = document.getElementById('waiting-cancel-button');
   const waitingBackdrop = document.getElementById('waiting-response-backdrop');
   function cancelFlow() {
-    waitingRespModal.style.display = 'none';
+    console.log('[waiting-response] user canceled');
+    closeAllModals();
     server.send({ type: 'transfer-cancel', to: currentRecipientId });
   }
-  waitingCancelBtn.addEventListener('click', cancelFlow);
-  waitingBackdrop.addEventListener('click', cancelFlow);
-
-  // On the receiving side, after accepting, we show "receiving-status-modal" 
-  // => done in the PeersManager. The user can also implement a "cancel" if they want.
-
-  // If "transfer-cancel" => see `_onTransferCancel` in PeersManager to hide modals.
+  waitingCancelBtn.onclick = cancelFlow;
+  waitingBackdrop.onclick = cancelFlow;
 
   /***********************************************************
-   * SENDING MESSAGES once accepted
-   ***********************************************************/
+   * SENDING MESSAGES
+   **********************************************************/
   const sendMsgModal = document.getElementById('send-message-modal');
   const sendMsgBackdrop = document.getElementById('send-message-backdrop');
   const sendMsgCancelBtn = document.getElementById('send-message-cancel');
   const sendMsgBtn = document.getElementById('send-message-button');
   const messageInput = document.getElementById('message-input');
 
-  sendMsgCancelBtn.addEventListener('click', () => {
-    sendMsgModal.style.display = 'none';
+  function cancelMessage() {
+    console.log('[send-message] user canceled');
+    closeAllModals();
     server.send({ type: 'transfer-cancel', to: currentRecipientId });
-  });
-  sendMsgBackdrop.addEventListener('click', () => {
-    sendMsgModal.style.display = 'none';
-    server.send({ type: 'transfer-cancel', to: currentRecipientId });
-  });
-  sendMsgBtn.addEventListener('click', () => {
+    messageInput.value = '';
+  }
+
+  sendMsgCancelBtn.onclick = cancelMessage;
+  sendMsgBackdrop.onclick = cancelMessage;
+
+  sendMsgBtn.onclick = async () => {
     const text = messageInput.value.trim();
     if (!text || !currentRecipientId) return;
+    console.log('[send-message] sending text to', currentRecipientId, text);
     const rtpw = peersMgr.ensureRTCPeer(currentRecipientId, true);
-    // We'll send "type: 'text', text" as JSON
     const obj = { type: 'text', text: btoa(unescape(encodeURIComponent(text))) };
-    if (rtpw.dc && rtpw.dc.readyState === 'open') {
-      rtpw.dc.send(JSON.stringify(obj));
+
+    if (!rtpw.dc || rtpw.dc.readyState !== 'open') {
+      console.warn('[send-message] datachannel not open, cannot send');
+      return;
     }
+    await rtpw.sendData(JSON.stringify(obj));
     messageInput.value = '';
-    sendMsgModal.style.display = 'none';
-    // show "transfer-complete" modal?
+    closeAllModals();
+
     document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
     document.getElementById('transfer-complete-text').textContent =
       `Your message has been delivered.`;
     document.getElementById('transfer-complete-modal').style.display = 'flex';
-  });
+  };
 
-  // If we receive text from the data channel, show "incoming-message-modal"
+  // If we receive text from the data channel
   Evt.on('rtc-data', (e) => {
     const { data, fromId } = e.detail;
     if (typeof data === 'string') {
+      // Possibly JSON
+      let obj;
       try {
-        const obj = JSON.parse(data);
-        if (obj.type === 'text') {
-          const decoded = decodeURIComponent(escape(atob(obj.text)));
-          // show "incoming-message-modal"
-          const incMsgModal = document.getElementById('incoming-message-modal');
-          document.getElementById('incoming-message-header').textContent =
-            `Message from ${peersMgr.peers[fromId]?.info.name.displayName || 'Unknown'}`;
-          document.getElementById('incoming-message-text').textContent = decoded;
-          incMsgModal.style.display = 'flex';
-
-          // Hide "receiving-status-modal"
-          document.getElementById('receiving-status-modal').style.display = 'none';
-
-          // We can also send a "transfer-complete" if we want:
-          server.send({
-            type: 'transfer-complete',
-            to: fromId
-          });
-        } else if (obj.type === 'header' || obj.type === 'done') {
-          // handled in the file logic below
-        }
+        obj = JSON.parse(data);
       } catch {
-        // plain text?
+        // plain text
+        return;
       }
-    } else {
-      // array buffer => file chunk => handled in next section
+      if (obj.type === 'text') {
+        console.log('[rtc-data text] from', fromId, ' =>', obj);
+        const decoded = decodeURIComponent(escape(atob(obj.text)));
+        closeAllModals();
+        document.getElementById('incoming-message-header').textContent =
+          `Message from ${peersMgr.peers[fromId]?.info.name.displayName || 'Unknown'}`;
+        document.getElementById('incoming-message-text').textContent = decoded;
+        document.getElementById('incoming-message-modal').style.display = 'flex';
+
+        // send "transfer-complete" so sender sees a success
+        server.send({
+          type: 'transfer-complete',
+          to: fromId
+        });
+      }
     }
   });
 
   // "incoming-message-modal" => close or respond
-  document.getElementById('incoming-message-close').addEventListener('click', () => {
-    document.getElementById('incoming-message-modal').style.display = 'none';
-  });
-  document.getElementById('incoming-message-respond').addEventListener('click', () => {
-    document.getElementById('incoming-message-modal').style.display = 'none';
+  document.getElementById('incoming-message-close').onclick = () => {
+    closeAllModals();
+  };
+  document.getElementById('incoming-message-respond').onclick = () => {
+    closeAllModals();
     document.getElementById('send-message-modal').style.display = 'flex';
-  });
+  };
 
   /***********************************************************
-   * SENDING FILES once accepted
-   ***********************************************************/
+   * SENDING FILES
+   **********************************************************/
   const sendFilesModal = document.getElementById('send-files-modal');
   const sendFilesBackdrop = document.getElementById('send-files-backdrop');
   const dropZone = document.getElementById('drop-zone');
@@ -673,29 +686,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const startFileTransferBtn = document.getElementById('start-file-transfer');
   let selectedFiles = [];
 
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', (evt) => {
-    evt.preventDefault();
+  function cancelFileSending() {
+    console.log('[send-files] user canceled');
+    closeAllModals();
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
+    selectedFiles = [];
+    renderSelectedFiles();
+  }
+
+  dropZone.onclick = () => fileInput.click();
+  dropZone.ondragover = (e) => {
+    e.preventDefault();
     dropZone.classList.add('bg-gray-100');
-  });
-  dropZone.addEventListener('dragleave', (evt) => {
-    evt.preventDefault();
+  };
+  dropZone.ondragleave = (e) => {
+    e.preventDefault();
     dropZone.classList.remove('bg-gray-100');
-  });
-  dropZone.addEventListener('drop', (evt) => {
-    evt.preventDefault();
+  };
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
     dropZone.classList.remove('bg-gray-100');
-    if (evt.dataTransfer.files && evt.dataTransfer.files.length) {
-      handleFiles(evt.dataTransfer.files);
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      handleFiles(e.dataTransfer.files);
     }
-  });
-  fileInput.addEventListener('change', (evt) => {
-    handleFiles(evt.target.files);
-  });
+  };
+  fileInput.onchange = (e) => {
+    handleFiles(e.target.files);
+  };
 
   function handleFiles(files) {
-    for (let i = 0; i < files.length; i++) {
-      selectedFiles.push(files[i]);
+    for (const f of files) {
+      selectedFiles.push(f);
     }
     renderSelectedFiles();
   }
@@ -714,155 +735,185 @@ document.addEventListener('DOMContentLoaded', () => {
       span.textContent = file.name;
       const trash = document.createElement('i');
       trash.className = 'fas fa-trash text-red-500 cursor-pointer';
-      trash.addEventListener('click', () => {
+      trash.onclick = () => {
         selectedFiles.splice(idx, 1);
         renderSelectedFiles();
-      });
+      };
       div.appendChild(span);
       div.appendChild(trash);
       selectedFilesContainer.appendChild(div);
     });
   }
 
-  sendFilesCancelBtn.addEventListener('click', () => {
-    sendFilesModal.style.display = 'none';
-    server.send({ type: 'transfer-cancel', to: currentRecipientId });
-    selectedFiles = [];
-  });
-  sendFilesBackdrop.addEventListener('click', () => {
-    sendFilesModal.style.display = 'none';
-    server.send({ type: 'transfer-cancel', to: currentRecipientId });
-    selectedFiles = [];
-  });
+  sendFilesCancelBtn.onclick = cancelFileSending;
+  sendFilesBackdrop.onclick = cancelFileSending;
 
-  startFileTransferBtn.addEventListener('click', () => {
+  startFileTransferBtn.onclick = async () => {
     if (!currentRecipientId || !selectedFiles.length) return;
-    sendFilesModal.style.display = 'none';
+    console.log('[send-files] starting transfer to', currentRecipientId);
+    closeAllModals();
 
     // We'll chunk the files over the datachannel
     const rtpw = peersMgr.ensureRTCPeer(currentRecipientId, true);
-    // For each file => do Snapdrop style chunking
-    (async function sendAll() {
-      for (const file of selectedFiles) {
-        // 1) send a "header"
-        const header = JSON.stringify({
+
+    // 0) send a "batch-header" so receiver knows how many files total
+    const total = selectedFiles.length;
+    rtpw.sendData(JSON.stringify({ type: 'batch-header', total }));
+
+    // 1) For each file
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      console.log(`[SENDING FILE] #${i+1}/${total} => ${file.name}`);
+      // a) send "header"
+      await rtpw.sendData(
+        JSON.stringify({
           type: 'header',
           name: file.name,
           size: file.size,
           mime: file.type
-        });
-        rtpw.sendData(header);
+        })
+      );
 
-        // 2) chunk
-        const chunkSize = 65536;
-        let offset = 0;
-        while (offset < file.size) {
-          const slice = file.slice(offset, offset + chunkSize);
-          const buffer = await slice.arrayBuffer();
-          rtpw.sendData(buffer);
-          offset += buffer.byteLength;
-          // small pause
-          await new Promise((res) => setTimeout(res, 0));
-        }
-
-        // 3) done
-        const doneMsg = JSON.stringify({ type: 'done' });
-        rtpw.sendData(doneMsg);
+      // b) chunk
+      const chunkSize = 65536;
+      let offset = 0;
+      while (offset < file.size) {
+        // check data channel buffer
+        const slice = file.slice(offset, offset + chunkSize);
+        const buffer = await slice.arrayBuffer();
+        offset += buffer.byteLength;
+        console.log(
+          `[CHUNK SENDING] file=${file.name} offset=${offset}/${file.size} size=${buffer.byteLength}`
+        );
+        await rtpw.sendData(buffer);
       }
-      // show "transfer-complete" for the user
-      document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
-      document.getElementById('transfer-complete-text').textContent =
-        `Your file(s) have been delivered.`;
-      document.getElementById('transfer-complete-modal').style.display = 'flex';
-    })();
 
+      // c) done
+      await rtpw.sendData(JSON.stringify({ type: 'done' }));
+      console.log(`[SENDING FILE] done => ${file.name}`);
+    }
+
+    console.log('[send-files] all files done, showing success modal');
     selectedFiles = [];
     renderSelectedFiles();
-  });
 
-  // Receiving side: if we see "rtc-data" with "header"/"done" or chunk => reassemble
+    document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
+    document.getElementById('transfer-complete-text').textContent =
+      `Your file(s) have been delivered.`;
+    document.getElementById('transfer-complete-modal').style.display = 'flex';
+  };
+
+  /***********************************************************
+   * RECEIVING FILES
+   **********************************************************/
   const receivingFilesModal = document.getElementById('receiving-files-modal');
   const fileProgressList = document.getElementById('file-progress-list');
+  let incomingFileBatch = { total: 0, currentIndex: 0 };
   let incomingFileDigester = null;
   let receivedFiles = [];
 
   Evt.on('rtc-data', (e) => {
     const { data, fromId } = e.detail;
-    if (typeof data === 'string') {
-      // maybe JSON?
-      let obj;
-      try {
-        obj = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (obj.type === 'header') {
-        // open receiving-files-modal
-        receivingFilesModal.style.display = 'flex';
-        incomingFileDigester = {
-          name: obj.name,
-          size: obj.size,
-          mime: obj.mime,
-          chunks: [],
-          bytes: 0
-        };
-        // create a progress bar
-        const container = document.createElement('div');
-        container.className = 'w-full mb-4';
-        const label = document.createElement('p');
-        label.className = 'text-sm mb-1 text-[#333533]';
-        label.textContent = obj.name;
-        const barC = document.createElement('div');
-        barC.className = 'file-progress-bar-container';
-        const bar = document.createElement('div');
-        bar.className = 'file-progress-bar';
-        bar.style.width = '0%';
-        barC.appendChild(bar);
-        container.appendChild(label);
-        container.appendChild(barC);
-        fileProgressList.appendChild(container);
-        incomingFileDigester._bar = bar;
-
-        // hide "receiving-status-modal"
-        document.getElementById('receiving-status-modal').style.display = 'none';
-      } else if (obj.type === 'done') {
-        if (!incomingFileDigester) return;
-        // finalize
-        const { name, mime, size, chunks } = incomingFileDigester;
-        const blob = new Blob(chunks, { type: mime });
-        receivedFiles.push({ name, blob });
-
-        // reset
-        incomingFileDigester = null;
-
-        // open file-preview-modal automatically:
-        const fpModal = document.getElementById('file-preview-modal');
-        fpModal.style.display = 'flex';
-        renderFilePreview(receivedFiles.length - 1);
-
-        // we can also send "transfer-complete" to the sender
-        server.send({
-          type: 'transfer-complete',
-          to: fromId
-        });
-      }
-    } else {
-      // array buffer => chunk
+    if (typeof data !== 'string') {
+      // Must be a chunk
       if (incomingFileDigester) {
         incomingFileDigester.chunks.push(data);
         incomingFileDigester.bytes += data.byteLength;
+        console.log(
+          `[CHUNK RECEIVED] file=${incomingFileDigester.name} chunkSize=${data.byteLength} totalReceived=${incomingFileDigester.bytes}/${incomingFileDigester.size}`
+        );
         const pct = Math.floor((incomingFileDigester.bytes / incomingFileDigester.size) * 100);
         if (incomingFileDigester._bar) {
           incomingFileDigester._bar.style.width = pct + '%';
+          incomingFileDigester._barLabel.textContent =
+            `${pct}% (File ${incomingFileBatch.currentIndex}/${incomingFileBatch.total})`;
         }
       }
+      return;
+    }
+
+    // It's a string => maybe JSON
+    let obj;
+    try {
+      obj = JSON.parse(data);
+    } catch {
+      return;
+    }
+
+    if (obj.type === 'batch-header') {
+      // total files
+      incomingFileBatch.total = obj.total;
+      incomingFileBatch.currentIndex = 0;
+      console.log('[rtc-data] batch-header => total files =', obj.total);
+      receivingFilesModal.style.display = 'flex';
+      return;
+    }
+
+    if (obj.type === 'header') {
+      incomingFileBatch.currentIndex++;
+      console.log(`[RECEIVING] file #${incomingFileBatch.currentIndex}/${incomingFileBatch.total}: ${obj.name}`);
+      closeAllModals();
+      receivingFilesModal.style.display = 'flex';
+
+      incomingFileDigester = {
+        name: obj.name,
+        size: obj.size,
+        mime: obj.mime,
+        chunks: [],
+        bytes: 0,
+        index: incomingFileBatch.currentIndex
+      };
+      // create progress bar
+      const container = document.createElement('div');
+      container.className = 'w-full mb-4';
+      const label = document.createElement('p');
+      label.className = 'text-sm mb-1 text-[#333533]';
+      label.textContent = `${obj.name} (File ${incomingFileBatch.currentIndex}/${incomingFileBatch.total})`;
+
+      const barC = document.createElement('div');
+      barC.className = 'file-progress-bar-container';
+      const bar = document.createElement('div');
+      bar.className = 'file-progress-bar';
+      bar.style.width = '0%';
+
+      barC.appendChild(bar);
+      container.appendChild(label);
+      container.appendChild(barC);
+      fileProgressList.appendChild(container);
+
+      incomingFileDigester._bar = bar;
+      incomingFileDigester._barLabel = label;
+
+      // hide "receiving-status-modal"
+      document.getElementById('receiving-status-modal').style.display = 'none';
+    } else if (obj.type === 'done') {
+      if (!incomingFileDigester) return;
+      console.log('[RECEIVING] done =>', incomingFileDigester.name);
+      const { name, mime, size, chunks } = incomingFileDigester;
+      const blob = new Blob(chunks, { type: mime });
+      receivedFiles.push({ name, blob });
+
+      incomingFileDigester = null;
+
+      // auto-open preview
+      document.getElementById('file-preview-modal').style.display = 'flex';
+      renderFilePreview(receivedFiles.length - 1);
+
+      // signal "transfer-complete"
+      server.send({
+        type: 'transfer-complete',
+        to: fromId
+      });
     }
   });
 
-  // file-preview logic
+  /***********************************************************
+   * FILE PREVIEW
+   **********************************************************/
   const filePreviewModal = document.getElementById('file-preview-modal');
   const filePreviewContent = document.getElementById('file-preview-content');
   let currentFileIndex = 0;
+
   function renderFilePreview(i) {
     if (i < 0 || i >= receivedFiles.length) return;
     currentFileIndex = i;
@@ -884,35 +935,34 @@ document.addEventListener('DOMContentLoaded', () => {
       filePreviewContent.appendChild(p);
     }
   }
-  document.getElementById('prev-file-btn').addEventListener('click', () => {
+  document.getElementById('prev-file-btn').onclick = () => {
     if (currentFileIndex > 0) {
       currentFileIndex--;
       renderFilePreview(currentFileIndex);
     }
-  });
-  document.getElementById('next-file-btn').addEventListener('click', () => {
+  };
+  document.getElementById('next-file-btn').onclick = () => {
     if (currentFileIndex < receivedFiles.length - 1) {
       currentFileIndex++;
       renderFilePreview(currentFileIndex);
     }
-  });
-  document.getElementById('file-preview-close').addEventListener('click', () => {
+  };
+  document.getElementById('file-preview-close').onclick = () => {
     filePreviewModal.style.display = 'none';
-    // clear if you like
-  });
-  document.getElementById('file-preview-backdrop').addEventListener('click', () => {
+  };
+  document.getElementById('file-preview-backdrop').onclick = () => {
     filePreviewModal.style.display = 'none';
-  });
+  };
 
   // Download buttons
-  document.getElementById('download-current-file').addEventListener('click', () => {
+  document.getElementById('download-current-file').onclick = () => {
     if (!receivedFiles.length) return;
     const { name, blob } = receivedFiles[currentFileIndex];
     triggerDownload(name, blob);
-  });
-  document.getElementById('download-all-files').addEventListener('click', () => {
+  };
+  document.getElementById('download-all-files').onclick = () => {
     receivedFiles.forEach((f) => triggerDownload(f.name, f.blob));
-  });
+  };
 
   function triggerDownload(name, blob) {
     const url = URL.createObjectURL(blob);
@@ -924,54 +974,84 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.removeChild(a);
   }
 
-  // Transfer complete modal
+  /***********************************************************
+   * TRANSFER COMPLETE
+   **********************************************************/
   Evt.on('transfer-complete', (e) => {
-    // if I'm the sender, show a success
+    console.log('[transfer-complete] from remote => show success');
     document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
     document.getElementById('transfer-complete-text').textContent =
       'Your transfer is complete!';
     document.getElementById('transfer-complete-modal').style.display = 'flex';
   });
-  const tcClose = document.getElementById('transfer-complete-close');
-  const tcBackdrop = document.getElementById('transfer-complete-backdrop');
-  tcClose.addEventListener('click', () => {
-    document.getElementById('transfer-complete-modal').style.display = 'none';
-  });
-  tcBackdrop.addEventListener('click', () => {
-    document.getElementById('transfer-complete-modal').style.display = 'none';
-  });
+  document.getElementById('transfer-complete-close').onclick = () => {
+    closeAllModals();
+  };
+  document.getElementById('transfer-complete-backdrop').onclick = () => {
+    closeAllModals();
+  };
 
-  // Peer lost modal
-  document.getElementById('peer-lost-close').addEventListener('click', () => {
-    document.getElementById('peer-lost-modal').style.display = 'none';
-  });
-  document.getElementById('peer-lost-backdrop').addEventListener('click', () => {
-    document.getElementById('peer-lost-modal').style.display = 'none';
-  });
+  /***********************************************************
+   * Peer Lost
+   **********************************************************/
+  document.getElementById('peer-lost-close').onclick = () => {
+    closeAllModals();
+  };
+  document.getElementById('peer-lost-backdrop').onclick = () => {
+    closeAllModals();
+  };
 
-  // server-disconnected
-  document.getElementById('server-disconnected-close').addEventListener('click', () => {
-    document.getElementById('server-disconnected-modal').style.display = 'none';
-  });
+  /***********************************************************
+   * Server Disconnected
+   **********************************************************/
+  document.getElementById('server-disconnected-close').onclick = () => {
+    closeAllModals();
+  };
 
-  // Info & Author modals
-  document.getElementById('info-button').addEventListener('click', () => {
+  /***********************************************************
+   * Info & Author modals
+   **********************************************************/
+  document.getElementById('info-button').onclick = () => {
+    closeAllModals();
     document.getElementById('info-modal').style.display = 'flex';
-  });
-  document.getElementById('info-modal-close').addEventListener('click', () => {
+  };
+  document.getElementById('info-modal-close').onclick = () => {
     document.getElementById('info-modal').style.display = 'none';
-  });
-  document.getElementById('info-modal-backdrop').addEventListener('click', () => {
+  };
+  document.getElementById('info-modal-backdrop').onclick = () => {
     document.getElementById('info-modal').style.display = 'none';
-  });
+  };
 
-  document.getElementById('author-button').addEventListener('click', () => {
+  document.getElementById('author-button').onclick = () => {
+    closeAllModals();
     document.getElementById('author-modal').style.display = 'flex';
-  });
-  document.getElementById('author-modal-close').addEventListener('click', () => {
+  };
+  document.getElementById('author-modal-close').onclick = () => {
     document.getElementById('author-modal').style.display = 'none';
-  });
-  document.getElementById('author-modal-backdrop').addEventListener('click', () => {
+  };
+  document.getElementById('author-modal-backdrop').onclick = () => {
     document.getElementById('author-modal').style.display = 'none';
-  });
+  };
 });
+
+/***********************************************************
+ * Helper to close all modals forcibly
+ **********************************************************/
+function closeAllModals() {
+  const modals = [
+    'choose-action-modal',
+    'incoming-request-modal',
+    'waiting-response-modal',
+    'receiving-status-modal',
+    'send-message-modal',
+    'incoming-message-modal',
+    'transfer-complete-modal',
+    'peer-lost-modal',
+    'send-files-modal',
+    'receiving-files-modal',
+    'file-preview-modal'
+  ];
+  for (const m of modals) {
+    document.getElementById(m).style.display = 'none';
+  }
+}
