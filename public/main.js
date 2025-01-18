@@ -2,17 +2,24 @@
  * main.js
  *
  * Major Features:
- *  - Peer discovery via WebSockets
- *  - WebRTC for file and message transfer (fast, direct P2P)
- *  - Snapdrop-like chunking over the RTC data channel
- *  - The server is only used for signaling (offer/answer/ICE)
+ *  - Shows each peer by codename (e.g. "Green Tiger")
+ *  - WebSocket: discover peers, send "transfer-request" 
+ *  - Upon accept, we do a WebRTC data channel for actual file transfer
+ *  - The existing "Incoming Transfer" modals now work properly
  *************************************************************/
 
-window.isRtcSupported = !!(
-  window.RTCPeerConnection ||
-  window.mozRTCPeerConnection ||
-  window.webkitRTCPeerConnection
-);
+// A small event bus
+const Evt = {
+  on(evt, fn) {
+    window.addEventListener(evt, fn, false);
+  },
+  off(evt, fn) {
+    window.removeEventListener(evt, fn, false);
+  },
+  fire(evt, detail) {
+    window.dispatchEvent(new CustomEvent(evt, { detail }));
+  }
+};
 
 function detectDeviceType() {
   const ua = navigator.userAgent.toLowerCase();
@@ -24,535 +31,628 @@ function detectDeviceType() {
   return 'desktop';
 }
 
-//
-// Simple Event Emitter
-//
-const Evt = {
-  on(event, fn) {
-    window.addEventListener(event, fn, false);
-  },
-  off(event, fn) {
-    window.removeEventListener(event, fn, false);
-  },
-  fire(event, detail) {
-    window.dispatchEvent(new CustomEvent(event, { detail }));
-  }
-};
-
-//
-// A small wrapper for the WebSocket to talk to our server
-//
+/***********************************************************
+ * Our global server connection
+ **********************************************************/
 class ServerConnection {
   constructor(deviceType) {
-    this.deviceType = deviceType;
     this.socket = null;
-    this.id = null;
-    this.displayName = null;
+    this.id = null; // our own peerId
+    this.displayName = null; // e.g. "Green Tiger"
+    this.deviceType = deviceType;
     this.connect();
   }
 
   connect() {
     const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const endpoint = protocol + location.host; // same host
+    const endpoint = protocol + location.host;
     this.socket = new WebSocket(endpoint);
+
     this.socket.onopen = () => {
-      console.log('[WS] Connected');
+      console.log('[WS] open');
       // Introduce ourselves
       this.send({ type: 'introduce', name: { deviceType: this.deviceType } });
     };
+    this.socket.onerror = (err) => {
+      console.error('[WS] error:', err);
+    };
     this.socket.onclose = () => {
-      console.log('[WS] Disconnected');
-      Evt.fire('server-disconnected');
+      console.log('[WS] closed');
+      document.getElementById('server-disconnected-modal').style.display = 'flex';
     };
-    this.socket.onerror = err => {
-      console.error('[WS] Error', err);
-    };
-    this.socket.onmessage = e => this._onMessage(e);
+    this.socket.onmessage = (evt) => this._onMessage(evt);
   }
 
-  _onMessage(e) {
+  _onMessage(evt) {
     let msg;
     try {
-      msg = JSON.parse(e.data);
-    } catch (err) {
-      console.error('[WS] Malformed message', e.data);
+      msg = JSON.parse(evt.data);
+    } catch {
       return;
     }
-
     switch (msg.type) {
-      case 'display-name':
+      case 'display-name': {
+        // This is our own ID & codename
         this.id = msg.message.peerId;
         this.displayName = msg.message.displayName;
-        document.getElementById('device-name').textContent = this.displayName;
+        const deviceNameElem = document.getElementById('device-name');
+        if (deviceNameElem) deviceNameElem.textContent = this.displayName;
         break;
+      }
       case 'peers':
-        Evt.fire('peers', msg.peers);
+        Evt.fire('server-peers', msg.peers);
         break;
       case 'peer-joined':
-        Evt.fire('peer-joined', msg.peer);
+        Evt.fire('server-peer-joined', msg.peer);
         break;
       case 'peer-left':
-        Evt.fire('peer-left', msg.peerId);
+        Evt.fire('server-peer-left', msg.peerId);
+        break;
+      case 'peer-updated':
+        Evt.fire('server-peer-updated', msg.peer);
         break;
       case 'ping':
         this.send({ type: 'pong' });
         break;
-      case 'peer-updated':
-        // Could handle updates if needed
-        break;
       case 'signal':
-        // WebRTC signaling
-        Evt.fire('signal', msg);
+      case 'transfer-request':
+      case 'transfer-accept':
+      case 'transfer-decline':
+      case 'transfer-cancel':
+      case 'send-message':
+      case 'transfer-complete':
+      case 'transfer-error': {
+        // Forward to your code
+        Evt.fire(msg.type, msg);
         break;
-      default:
-        console.log('[WS] Unknown message:', msg);
-        break;
-    }
-  }
-
-  send(msg) {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(msg));
-    }
-  }
-}
-
-//
-// The RTCPeer is in charge of creating a data channel with one peer
-// and sending/receiving files/messages directly over that channel.
-//
-class RTCPeer {
-  constructor(server, peerId) {
-    this.server = server; // our ServerConnection
-    this.peerId = peerId; // remote peer
-    this.pc = null;
-    this.channel = null;
-    this.filesQueue = [];
-    this.sendingFile = false;
-    // If we are the "caller," we create the offer. If "callee," wait for an offer.
-    if (peerId) {
-      // we are the "caller"
-      this._initPeerConnection(true);
-    }
-  }
-
-  // For the callee, we do not create an offer until we get an inbound signal.
-  handleSignal(msg) {
-    if (!this.pc) {
-      // we are the callee
-      this._initPeerConnection(false);
-    }
-    if (msg.sdp) {
-      this._onRemoteDescription(msg.sdp);
-    } else if (msg.ice) {
-      this._onRemoteIceCandidate(msg.ice);
-    }
-  }
-
-  _initPeerConnection(isCaller) {
-    this.pc = new RTCPeerConnection(RTCPeer.iceConfig);
-    this.pc.onicecandidate = e => this._onIceCandidate(e);
-    this.pc.onconnectionstatechange = e => this._onConnectionStateChange();
-    this.pc.oniceconnectionstatechange = e => this._onIceConnectionStateChange();
-
-    if (isCaller) {
-      // create data channel
-      this.channel = this.pc.createDataChannel('drpl-data');
-      this._setupChannel(this.channel);
-      // create offer
-      this.pc
-        .createOffer()
-        .then(desc => {
-          return this.pc.setLocalDescription(desc);
-        })
-        .then(() => {
-          this._sendSignal({ sdp: this.pc.localDescription });
-        })
-        .catch(console.error);
-    } else {
-      // we are callee => wait for ondatachannel
-      this.pc.ondatachannel = evt => {
-        this.channel = evt.channel;
-        this._setupChannel(this.channel);
-      };
-    }
-  }
-
-  _onIceCandidate(e) {
-    if (!e.candidate) return;
-    this._sendSignal({ ice: e.candidate });
-  }
-  _onConnectionStateChange() {
-    console.log('[RTC] connectionState =', this.pc.connectionState);
-    if (this.pc.connectionState === 'failed') {
-      // handle failure
-    }
-  }
-  _onIceConnectionStateChange() {
-    console.log('[RTC] iceConnectionState =', this.pc.iceConnectionState);
-  }
-  _onRemoteDescription(sdp) {
-    const desc = new RTCSessionDescription(sdp);
-    this.pc
-      .setRemoteDescription(desc)
-      .then(() => {
-        if (desc.type === 'offer') {
-          return this.pc
-            .createAnswer()
-            .then(answer => {
-              return this.pc.setLocalDescription(answer);
-            })
-            .then(() => {
-              this._sendSignal({ sdp: this.pc.localDescription });
-            });
-        }
-      })
-      .catch(console.error);
-  }
-  _onRemoteIceCandidate(ice) {
-    this.pc.addIceCandidate(new RTCIceCandidate(ice)).catch(console.error);
-  }
-  _sendSignal(obj) {
-    obj.type = 'signal';
-    obj.to = this.peerId;
-    this.server.send(obj);
-  }
-
-  _setupChannel(channel) {
-    channel.binaryType = 'arraybuffer';
-    channel.onopen = () => {
-      console.log('[RTC] Data channel open with peer', this.peerId);
-      // If we have files queued, start sending
-      this._tryDequeueFile();
-    };
-    channel.onmessage = e => this._onData(e.data);
-    channel.onclose = () => {
-      console.log('[RTC] Data channel closed', this.peerId);
-    };
-  }
-
-  /********************************************************************
-   * Sending text
-   ********************************************************************/
-  sendText(text) {
-    if (!this.channel || this.channel.readyState !== 'open') {
-      console.log('[RTC] Channel not open yet, queue text?');
-      return;
-    }
-    const payload = { type: 'text', text: btoa(unescape(encodeURIComponent(text))) };
-    this.channel.send(JSON.stringify(payload));
-  }
-
-  /********************************************************************
-   * Sending files
-   ********************************************************************/
-  sendFiles(files) {
-    for (const f of files) {
-      this.filesQueue.push(f);
-    }
-    this._tryDequeueFile();
-  }
-
-  _tryDequeueFile() {
-    if (!this.channel || this.channel.readyState !== 'open') return;
-    if (this.sendingFile) return;
-    if (!this.filesQueue.length) return;
-    const file = this.filesQueue.shift();
-    this.sendingFile = true;
-    this._sendFile(file).then(() => {
-      console.log('[RTC] Sent file completely:', file.name);
-      this.sendingFile = false;
-      // send "transfer-complete"
-      Evt.fire('transfer-complete', { fromName: 'the receiver' });
-      this._tryDequeueFile();
-    });
-  }
-
-  async _sendFile(file) {
-    // 1) Send a header
-    const headerMsg = JSON.stringify({
-      type: 'header',
-      name: file.name,
-      size: file.size,
-      mime: file.type
-    });
-    this.channel.send(headerMsg);
-
-    // 2) Read the file in chunks and send
-    const chunkSize = 65536; // 64KB
-    let offset = 0;
-    while (offset < file.size) {
-      const slice = file.slice(offset, offset + chunkSize);
-      const buffer = await slice.arrayBuffer();
-      this.channel.send(buffer);
-      offset += buffer.byteLength;
-      const progress = offset / file.size;
-      Evt.fire('file-sending-progress', { file, progress });
-      // small delay to allow the channel buffer to clear
-      await new Promise(res => setTimeout(res, 0));
-    }
-    // 3) Send a final sentinel
-    const doneMsg = JSON.stringify({ type: 'done' });
-    this.channel.send(doneMsg);
-  }
-
-  /********************************************************************
-   * Receiving data
-   ********************************************************************/
-  _onData(data) {
-    if (typeof data === 'string') {
-      // Could be JSON or text
-      this._onStringData(data);
-    } else {
-      // It's an ArrayBuffer => file chunk
-      if (this._incomingFileDigester) {
-        this._incomingFileDigester.unchunk(data);
-        const progress = this._incomingFileDigester.progress;
-        Evt.fire('file-progress', { progress });
       }
-    }
-  }
-
-  _onStringData(str) {
-    let obj;
-    try {
-      obj = JSON.parse(str);
-    } catch {
-      // maybe it's plain text
-      obj = { type: 'text-plain', text: str };
-    }
-
-    switch (obj.type) {
-      case 'header':
-        this._incomingFileDigester = new FileDigester(obj);
-        Evt.fire('incoming-file', obj); // start progress bar
-        break;
-      case 'done':
-        if (this._incomingFileDigester) {
-          this._incomingFileDigester.finish();
-          const fileObj = this._incomingFileDigester.fileObj;
-          this._incomingFileDigester = null;
-          // Fire an event to let UI know a file was fully received
-          Evt.fire('file-received', fileObj);
-        }
-        break;
-      case 'text':
-        // decode text
-        const decoded = decodeURIComponent(escape(atob(obj.text)));
-        Evt.fire('rtc-text-received', { text: decoded, sender: this.peerId });
-        break;
       default:
-        // unknown or we ignore
-        console.log('[RTC] Unknown message:', obj);
+        console.log('[WS] unknown type:', msg);
+        break;
+    }
+  }
+
+  send(obj) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(obj));
     }
   }
 }
 
-// Basic data structure for reassembling a file
-class FileDigester {
-  constructor({ name, mime, size }) {
-    this.name = name;
-    this.mime = mime || 'application/octet-stream';
-    this.size = size;
-    this.chunks = [];
-    this.receivedBytes = 0;
-  }
-  unchunk(chunk) {
-    this.chunks.push(chunk);
-    this.receivedBytes += chunk.byteLength;
-  }
-  get progress() {
-    if (!this.size) return 0;
-    return this.receivedBytes / this.size;
-  }
-  finish() {
-    const blob = new Blob(this.chunks, { type: this.mime });
-    this.fileObj = {
-      name: this.name,
-      mime: this.mime,
-      size: this.size,
-      blob
-    };
-  }
-}
-
-RTCPeer.iceConfig = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-};
-
-//
-// The manager that tracks multiple peers
-//
+/***********************************************************
+ * A container for all known peers
+ **********************************************************/
 class PeersManager {
   constructor(server) {
     this.server = server;
-    this.peers = {}; // key = peerId, value = RTCPeer
-    Evt.on('peers', e => this._onPeers(e.detail));
-    Evt.on('peer-joined', e => this._onPeerJoined(e.detail));
-    Evt.on('peer-left', e => this._onPeerLeft(e.detail));
-    Evt.on('signal', e => this._onSignal(e.detail));
+    // Map of peerId => { info, rtp: RTCPeer or null, autoAccept: false }
+    this.peers = {};
+
+    // Listen for server events
+    Evt.on('server-peers', (e) => this._onPeersList(e.detail));
+    Evt.on('server-peer-joined', (e) => this._onPeerJoined(e.detail));
+    Evt.on('server-peer-left', (e) => this._onPeerLeft(e.detail));
+    Evt.on('server-peer-updated', (e) => this._onPeerUpdated(e.detail));
+
+    // Listen for WebRTC signals
+    Evt.on('signal', (e) => this._onSignal(e.detail));
+
+    // The user’s “transfer-request” flow
+    Evt.on('transfer-request', (e) => this._onTransferRequest(e.detail));
+    Evt.on('transfer-accept', (e) => this._onTransferAccept(e.detail));
+    Evt.on('transfer-decline', (e) => this._onTransferDecline(e.detail));
+    Evt.on('transfer-cancel', (e) => this._onTransferCancel(e.detail));
+
+    // text messages
+    Evt.on('send-message', (e) => this._onSendMessage(e.detail));
   }
 
-  _onPeers(peersArray) {
-    peersArray.forEach(peerInfo => {
-      this._ensurePeer(peerInfo.id, true);
+  _onPeersList(peersArr) {
+    // peersArr => array of { id, name { displayName, ...}, rtcSupported }
+    peersArr.forEach((p) => {
+      this.peers[p.id] = {
+        info: p,
+        rtp: null,
+        autoAccept: false
+      };
     });
-    // Fire a custom “all peers updated” event
-    Evt.fire('updated-peers', this.getPeerList());
+    this._updateUI();
   }
 
   _onPeerJoined(peerInfo) {
-    this._ensurePeer(peerInfo.id, true);
-    Evt.fire('updated-peers', this.getPeerList());
+    this.peers[peerInfo.id] = {
+      info: peerInfo,
+      rtp: null,
+      autoAccept: false
+    };
+    this._updateUI();
   }
 
   _onPeerLeft(peerId) {
-    if (this.peers[peerId]) {
-      delete this.peers[peerId];
+    delete this.peers[peerId];
+    this._updateUI();
+  }
+
+  _onPeerUpdated(peerInfo) {
+    if (!this.peers[peerInfo.id]) {
+      this.peers[peerInfo.id] = { info: peerInfo, rtp: null, autoAccept: false };
+    } else {
+      this.peers[peerInfo.id].info = peerInfo;
     }
-    Evt.fire('updated-peers', this.getPeerList());
+    this._updateUI();
   }
 
-  _onSignal(msg) {
-    const sender = msg.sender;
-    const peer = this._ensurePeer(sender, false);
-    peer.handleSignal(msg);
-  }
+  _updateUI() {
+    const peers = Object.values(this.peers);
+    const peerListElement = document.getElementById('peer-list');
+    const noPeersMessage = document.getElementById('no-peers-message');
 
-  _ensurePeer(id, isCaller) {
-    if (id === this.server.id) return null; // skip ourselves
-    if (!this.peers[id]) {
-      const newPeer = isCaller
-        ? new RTCPeer(this.server, id) // we create the channel
-        : new RTCPeer(this.server, null); // we wait for an offer
-      newPeer.peerId = id;
-      this.peers[id] = newPeer;
-    }
-    return this.peers[id];
-  }
-
-  getPeerList() {
-    return Object.keys(this.peers);
-  }
-
-  getPeerById(id) {
-    return this.peers[id];
-  }
-}
-
-// Once DOM is loaded, we hook up all your modals and logic
-document.addEventListener('DOMContentLoaded', () => {
-  const deviceType = detectDeviceType();
-  const serverConnection = new ServerConnection(deviceType);
-  const peersManager = new PeersManager(serverConnection);
-
-  //
-  // Basic UI references
-  //
-  const peerListElement = document.getElementById('peer-list');
-  const noPeersMessage = document.getElementById('no-peers-message');
-
-  //
-  // We'll store info about who is "currentRecipientId"
-  //
-  let currentRecipientId = null;
-
-  //
-  // Handle "peers" updated => rebuild the peer list
-  //
-  Evt.on('updated-peers', e => {
-    const peerIds = e.detail;
-    if (!peerIds.length) {
+    if (!peers.length) {
       noPeersMessage.style.display = 'block';
       peerListElement.innerHTML = '';
       return;
     }
     noPeersMessage.style.display = 'none';
     peerListElement.innerHTML = '';
-    peerIds.forEach(pid => {
-      // Snapdrop calls them "peer" in a single object, we can do similarly
-      const peerObj = peersManager.getPeerById(pid);
-      // We do not know the actual displayName from the server unless we store it in a global list.
-      // For demonstration, let's say we just show the peerId or something.
-      // You can store the 'name' from the "peer-joined" event. For now, just do "Peer <id.slice(...)>"
-      // Or store the name in an external map if you want. We'll keep it simpler.
 
-      // But we *did* get some info from the server's "peer-joined" or "peers" event if we wanted to store it.
-      // For a simpler approach, let's just show "Peer X" or "ID: X".
-
+    peers.forEach((p) => {
       const btn = document.createElement('button');
       btn.className =
         'peer-button w-full py-[15px] text-xl bg-[#333533] text-white rounded-lg hover:bg-[#242423] transition-colors';
+
       const iconEl = document.createElement('i');
       iconEl.classList.add('fas', 'fa-desktop', 'peer-device-icon', 'text-white');
       const textSpan = document.createElement('span');
-      textSpan.textContent = `Peer: ${pid.slice(0, 6)}...`;
+      // show the codename from p.info.name.displayName
+      textSpan.textContent = p.info.name.displayName;
+
       btn.appendChild(iconEl);
       btn.appendChild(textSpan);
+
       btn.addEventListener('click', () => {
-        currentRecipientId = pid;
-        document.getElementById('choose-action-device-name').textContent = `Send to ${pid}`;
-        document.getElementById('choose-action-modal').style.display = 'flex';
+        // open "choose action" modal
+        window.currentRecipientId = p.info.id;
+        const modal = document.getElementById('choose-action-modal');
+        document.getElementById('choose-action-device-name').textContent =
+          'Send to ' + p.info.name.displayName;
+        modal.style.display = 'flex';
       });
+
       peerListElement.appendChild(btn);
     });
-  });
+  }
 
-  //
-  // Very similar logic for "Send Files" or "Send Message" as in your code
-  //
+  // Called when we get a "signal" from the server => setRemoteDescription or ICE
+  _onSignal(msg) {
+    const fromId = msg.sender;
+    let peerObj = this.peers[fromId];
+    if (!peerObj) {
+      // create
+      peerObj = {
+        info: { id: fromId, name: { displayName: '??' } },
+        rtp: null,
+        autoAccept: false
+      };
+      this.peers[fromId] = peerObj;
+    }
+    if (!peerObj.rtp) {
+      peerObj.rtp = new RTCPeerConnectionWrapper(this.server, fromId);
+    }
+    peerObj.rtp.handleSignal(msg);
+  }
+
+  /*********************************************************
+   * The "transfer-request" flow
+   *********************************************************/
+  _onTransferRequest(msg) {
+    // receiving side => show "Incoming Transfer" unless autoAccept is set
+    const fromId = msg.sender;
+    let peerObj = this.peers[fromId];
+    if (!peerObj) {
+      peerObj = {
+        info: { id: fromId, name: { displayName: '??' } },
+        rtp: null,
+        autoAccept: false
+      };
+      this.peers[fromId] = peerObj;
+    }
+    const fromName = peerObj.info.name?.displayName || 'Unknown';
+
+    if (peerObj.autoAccept) {
+      // auto-accept
+      this.server.send({
+        type: 'transfer-accept',
+        to: fromId,
+        mode: msg.mode
+      });
+      // show "receiving-status-modal"
+      document.getElementById('incoming-request-modal').style.display = 'none';
+      const statModal = document.getElementById('receiving-status-modal');
+      const statText = document.getElementById('receiving-status-text');
+      statText.textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
+      statModal.style.display = 'flex';
+      return;
+    }
+
+    // show "incoming-request-modal"
+    const incModal = document.getElementById('incoming-request-modal');
+    const incText = document.getElementById('incoming-request-text');
+    incText.textContent = `${fromName} wants to send ${msg.mode === 'files' ? 'files' : 'a message'}.`;
+    incModal.style.display = 'flex';
+
+    // Accept or decline
+    const acceptBtn = document.getElementById('incoming-accept-button');
+    const declineBtn = document.getElementById('incoming-decline-button');
+    const autoChk = document.getElementById('always-accept-checkbox');
+
+    const handleAccept = () => {
+      incModal.style.display = 'none';
+      if (autoChk.checked) peerObj.autoAccept = true;
+
+      this.server.send({
+        type: 'transfer-accept',
+        to: fromId,
+        mode: msg.mode
+      });
+      // show "receiving-status-modal"
+      const statModal = document.getElementById('receiving-status-modal');
+      const statText = document.getElementById('receiving-status-text');
+      statText.textContent = `Waiting for ${fromName} to send ${msg.mode === 'files' ? 'files' : 'a message'}...`;
+      statModal.style.display = 'flex';
+
+      acceptBtn.removeEventListener('click', handleAccept);
+      declineBtn.removeEventListener('click', handleDecline);
+    };
+
+    const handleDecline = () => {
+      incModal.style.display = 'none';
+      this.server.send({
+        type: 'transfer-decline',
+        to: fromId
+      });
+      acceptBtn.removeEventListener('click', handleAccept);
+      declineBtn.removeEventListener('click', handleDecline);
+    };
+
+    acceptBtn.addEventListener('click', handleAccept);
+    declineBtn.addEventListener('click', handleDecline);
+  }
+
+  _onTransferAccept(msg) {
+    // sender side => hide "waiting-response-modal", open RTCPeer
+    const fromId = msg.sender;
+    const mode = msg.mode;
+    let peerObj = this.peers[fromId];
+    if (!peerObj) {
+      peerObj = {
+        info: { id: fromId, name: { displayName: '??' } },
+        rtp: null,
+        autoAccept: false
+      };
+      this.peers[fromId] = peerObj;
+    }
+    document.getElementById('waiting-response-modal').style.display = 'none';
+
+    // create the RTCPeer if not existing
+    if (!peerObj.rtp) {
+      peerObj.rtp = new RTCPeerConnectionWrapper(this.server, fromId, true);
+    }
+
+    if (mode === 'files') {
+      // show "send-files-modal"
+      document.getElementById('send-files-modal').style.display = 'flex';
+    } else if (mode === 'message') {
+      // show "send-message-modal"
+      document.getElementById('send-message-modal').style.display = 'flex';
+    }
+  }
+
+  _onTransferDecline(msg) {
+    // sender side => hide waiting modal
+    document.getElementById('waiting-response-modal').style.display = 'none';
+    alert('They declined the transfer.');
+  }
+
+  _onTransferCancel(msg) {
+    // either side => close modals
+    alert('The other device canceled the transfer.');
+    document.getElementById('waiting-response-modal').style.display = 'none';
+    document.getElementById('send-files-modal').style.display = 'none';
+    document.getElementById('send-message-modal').style.display = 'none';
+    document.getElementById('receiving-status-modal').style.display = 'none';
+  }
+
+  /*********************************************************
+   * If we see "send-message" directly from the server, that
+   * might be a fallback—but we're using WebRTC. In your code,
+   * you might actually just do "incoming-message" 
+   * if you want a fallback. We'll do minimal handling here.
+   *********************************************************/
+  _onSendMessage(msg) {
+    // (If you did actual fallback text over WS. 
+    // For pure WebRTC, you can ignore. Or display "Message from X"?)
+  }
+
+  // Helper to retrieve or create an RTCPeerConnection
+  ensureRTCPeer(peerId, isCaller) {
+    let p = this.peers[peerId];
+    if (!p) {
+      p = {
+        info: { id: peerId, name: { displayName: '??' } },
+        rtp: null,
+        autoAccept: false
+      };
+      this.peers[peerId] = p;
+    }
+    if (!p.rtp) {
+      p.rtp = new RTCPeerConnectionWrapper(this.server, peerId, isCaller);
+    }
+    return p.rtp;
+  }
+}
+
+/***********************************************************
+ * A thin wrapper that sets up a data channel for file xfers
+ * or text messages (like Snapdrop). 
+ * We do not open the channel until we actually need it, 
+ * or if we are the "caller" we open immediately.
+ **********************************************************/
+class RTCPeerConnectionWrapper {
+  constructor(server, remoteId, isCaller=false) {
+    this.server = server;
+    this.remoteId = remoteId;
+    this.pc = null;
+    this.dc = null;
+    this._init(isCaller);
+  }
+
+  _init(isCaller) {
+    this.pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+    this.pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        this.server.send({
+          type: 'signal',
+          to: this.remoteId,
+          ice: e.candidate
+        });
+      }
+    };
+    this.pc.onconnectionstatechange = () => {
+      console.log('[RTC] connectionState =', this.pc.connectionState);
+      if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
+        // Let user know
+        document.getElementById('peer-lost-modal').style.display = 'flex';
+      }
+    };
+    this.pc.oniceconnectionstatechange = () => {
+      console.log('[RTC] iceConnectionState =', this.pc.iceConnectionState);
+    };
+
+    if (isCaller) {
+      this.dc = this.pc.createDataChannel('drpl');
+      this._setupDataChannel(this.dc);
+      this.pc
+        .createOffer()
+        .then((desc) => this.pc.setLocalDescription(desc))
+        .then(() => {
+          this.server.send({
+            type: 'signal',
+            to: this.remoteId,
+            sdp: this.pc.localDescription
+          });
+        });
+    } else {
+      // wait for ondatachannel
+      this.pc.ondatachannel = (evt) => {
+        this.dc = evt.channel;
+        this._setupDataChannel(this.dc);
+      };
+    }
+  }
+
+  handleSignal(msg) {
+    if (msg.sdp) {
+      this._onRemoteDesc(msg.sdp);
+    } else if (msg.ice) {
+      this.pc.addIceCandidate(new RTCIceCandidate(msg.ice)).catch(console.error);
+    }
+  }
+
+  _onRemoteDesc(sdp) {
+    const desc = new RTCSessionDescription(sdp);
+    this.pc
+      .setRemoteDescription(desc)
+      .then(() => {
+        if (desc.type === 'offer') {
+          // create answer
+          return this.pc
+            .createAnswer()
+            .then((ans) => this.pc.setLocalDescription(ans))
+            .then(() => {
+              this.server.send({
+                type: 'signal',
+                to: this.remoteId,
+                sdp: this.pc.localDescription
+              });
+            });
+        }
+      })
+      .catch(console.error);
+  }
+
+  _setupDataChannel(dc) {
+    dc.binaryType = 'arraybuffer';
+    dc.onopen = () => {
+      console.log('[RTC] dataChannel open with', this.remoteId);
+    };
+    dc.onmessage = (evt) => {
+      // The actual file or text chunk
+      Evt.fire('rtc-data', { fromId: this.remoteId, data: evt.data });
+    };
+    dc.onclose = () => {
+      console.log('[RTC] dataChannel closed with', this.remoteId);
+    };
+  }
+
+  sendData(data) {
+    if (this.dc && this.dc.readyState === 'open') {
+      this.dc.send(data);
+    }
+  }
+}
+
+/***********************************************************
+ * We'll keep the same "transfer-request" approach for 
+ * sending files and messages, but the actual bits go 
+ * over the data channel in Snapdrop style. 
+ **********************************************************/
+document.addEventListener('DOMContentLoaded', () => {
+  const deviceType = detectDeviceType();
+  const server = new ServerConnection(deviceType);
+  const peersMgr = new PeersManager(server);
+
+  // We'll store some ephemeral states
+  let currentMode = null; // 'files' or 'message'
+  let currentRecipientId = null;
+
+  // Hook up the "choose action" modal
   const chooseActionModal = document.getElementById('choose-action-modal');
   const chooseActionBackdrop = document.getElementById('choose-action-backdrop');
   const chooseActionSendFilesBtn = document.getElementById('choose-action-send-files');
-  const chooseActionSendMessageBtn = document.getElementById('choose-action-send-message');
+  const chooseActionSendMsgBtn = document.getElementById('choose-action-send-message');
 
   chooseActionSendFilesBtn.addEventListener('click', () => {
     chooseActionModal.style.display = 'none';
-    document.getElementById('send-files-modal').style.display = 'flex';
+    // Send a "transfer-request" for files
+    if (!window.currentRecipientId) return;
+    currentRecipientId = window.currentRecipientId;
+    currentMode = 'files';
+
+    // show "waiting-response-modal"
+    document.getElementById('waiting-response-modal').style.display = 'flex';
+    const peerName = peersMgr.peers[currentRecipientId]?.info.name.displayName || 'Unknown';
+    document.getElementById('waiting-response-text').textContent =
+      `Waiting for ${peerName} to accept...`;
+
+    server.send({
+      type: 'transfer-request',
+      to: currentRecipientId,
+      fromDisplayName: server.displayName,
+      mode: 'files'
+    });
   });
-  chooseActionSendMessageBtn.addEventListener('click', () => {
+
+  chooseActionSendMsgBtn.addEventListener('click', () => {
     chooseActionModal.style.display = 'none';
-    document.getElementById('send-message-modal').style.display = 'flex';
+    if (!window.currentRecipientId) return;
+    currentRecipientId = window.currentRecipientId;
+    currentMode = 'message';
+
+    // show "waiting-response-modal"
+    document.getElementById('waiting-response-modal').style.display = 'flex';
+    const peerName = peersMgr.peers[currentRecipientId]?.info.name.displayName || 'Unknown';
+    document.getElementById('waiting-response-text').textContent =
+      `Waiting for ${peerName} to accept...`;
+
+    server.send({
+      type: 'transfer-request',
+      to: currentRecipientId,
+      fromDisplayName: server.displayName,
+      mode: 'message'
+    });
   });
   chooseActionBackdrop.addEventListener('click', () => {
     chooseActionModal.style.display = 'none';
   });
 
-  //
-  // Sending text
-  //
-  const sendMessageModal = document.getElementById('send-message-modal');
+  // CANCEL from waiting or backdrop
+  const waitingRespModal = document.getElementById('waiting-response-modal');
+  const waitingCancelBtn = document.getElementById('waiting-cancel-button');
+  const waitingBackdrop = document.getElementById('waiting-response-backdrop');
+  function cancelFlow() {
+    waitingRespModal.style.display = 'none';
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
+  }
+  waitingCancelBtn.addEventListener('click', cancelFlow);
+  waitingBackdrop.addEventListener('click', cancelFlow);
+
+  // On the receiving side, after accepting, we show "receiving-status-modal" 
+  // => done in the PeersManager. The user can also implement a "cancel" if they want.
+
+  // If "transfer-cancel" => see `_onTransferCancel` in PeersManager to hide modals.
+
+  /***********************************************************
+   * SENDING MESSAGES once accepted
+   ***********************************************************/
+  const sendMsgModal = document.getElementById('send-message-modal');
+  const sendMsgBackdrop = document.getElementById('send-message-backdrop');
+  const sendMsgCancelBtn = document.getElementById('send-message-cancel');
+  const sendMsgBtn = document.getElementById('send-message-button');
   const messageInput = document.getElementById('message-input');
-  const sendMessageCancel = document.getElementById('send-message-cancel');
-  const sendMessageBtn = document.getElementById('send-message-button');
-  sendMessageCancel.addEventListener('click', () => {
-    sendMessageModal.style.display = 'none';
-    messageInput.value = '';
+
+  sendMsgCancelBtn.addEventListener('click', () => {
+    sendMsgModal.style.display = 'none';
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
   });
-  sendMessageBtn.addEventListener('click', () => {
+  sendMsgBackdrop.addEventListener('click', () => {
+    sendMsgModal.style.display = 'none';
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
+  });
+  sendMsgBtn.addEventListener('click', () => {
     const text = messageInput.value.trim();
-    if (!currentRecipientId || !text) return;
-    const peer = peersManager.getPeerById(currentRecipientId);
-    if (!peer) return;
-    peer.sendText(text);
-
-    // We can show "transfer-complete" if you like
-    Evt.fire('transfer-complete', { fromName: 'the receiver' });
-
-    sendMessageModal.style.display = 'none';
+    if (!text || !currentRecipientId) return;
+    const rtpw = peersMgr.ensureRTCPeer(currentRecipientId, true);
+    // We'll send "type: 'text', text" as JSON
+    const obj = { type: 'text', text: btoa(unescape(encodeURIComponent(text))) };
+    if (rtpw.dc && rtpw.dc.readyState === 'open') {
+      rtpw.dc.send(JSON.stringify(obj));
+    }
     messageInput.value = '';
+    sendMsgModal.style.display = 'none';
+    // show "transfer-complete" modal?
+    document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
+    document.getElementById('transfer-complete-text').textContent =
+      `Your message has been delivered.`;
+    document.getElementById('transfer-complete-modal').style.display = 'flex';
   });
 
-  //
-  // If we receive text from the peer, we show it
-  //
-  Evt.on('rtc-text-received', e => {
-    const { text, sender } = e.detail;
-    const incomingMsgModal = document.getElementById('incoming-message-modal');
-    document.getElementById('incoming-message-header').textContent = `Message from ${sender}`;
-    document.getElementById('incoming-message-text').textContent = text;
-    incomingMsgModal.style.display = 'flex';
+  // If we receive text from the data channel, show "incoming-message-modal"
+  Evt.on('rtc-data', (e) => {
+    const { data, fromId } = e.detail;
+    if (typeof data === 'string') {
+      try {
+        const obj = JSON.parse(data);
+        if (obj.type === 'text') {
+          const decoded = decodeURIComponent(escape(atob(obj.text)));
+          // show "incoming-message-modal"
+          const incMsgModal = document.getElementById('incoming-message-modal');
+          document.getElementById('incoming-message-header').textContent =
+            `Message from ${peersMgr.peers[fromId]?.info.name.displayName || 'Unknown'}`;
+          document.getElementById('incoming-message-text').textContent = decoded;
+          incMsgModal.style.display = 'flex';
+
+          // Hide "receiving-status-modal"
+          document.getElementById('receiving-status-modal').style.display = 'none';
+
+          // We can also send a "transfer-complete" if we want:
+          server.send({
+            type: 'transfer-complete',
+            to: fromId
+          });
+        } else if (obj.type === 'header' || obj.type === 'done') {
+          // handled in the file logic below
+        }
+      } catch {
+        // plain text?
+      }
+    } else {
+      // array buffer => file chunk => handled in next section
+    }
   });
+
+  // "incoming-message-modal" => close or respond
   document.getElementById('incoming-message-close').addEventListener('click', () => {
     document.getElementById('incoming-message-modal').style.display = 'none';
   });
@@ -561,38 +661,41 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('send-message-modal').style.display = 'flex';
   });
 
-  //
-  // Sending Files
-  //
+  /***********************************************************
+   * SENDING FILES once accepted
+   ***********************************************************/
   const sendFilesModal = document.getElementById('send-files-modal');
-  const fileInput = document.getElementById('file-input');
+  const sendFilesBackdrop = document.getElementById('send-files-backdrop');
   const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
   const selectedFilesContainer = document.getElementById('selected-files-container');
-  const startFileTransferBtn = document.getElementById('start-file-transfer');
   const sendFilesCancelBtn = document.getElementById('send-files-cancel');
+  const startFileTransferBtn = document.getElementById('start-file-transfer');
   let selectedFiles = [];
 
   dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
+  dropZone.addEventListener('dragover', (evt) => {
+    evt.preventDefault();
     dropZone.classList.add('bg-gray-100');
   });
-  dropZone.addEventListener('dragleave', e => {
-    e.preventDefault();
+  dropZone.addEventListener('dragleave', (evt) => {
+    evt.preventDefault();
     dropZone.classList.remove('bg-gray-100');
   });
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
+  dropZone.addEventListener('drop', (evt) => {
+    evt.preventDefault();
     dropZone.classList.remove('bg-gray-100');
-    handleSelectedFiles(e.dataTransfer.files);
+    if (evt.dataTransfer.files && evt.dataTransfer.files.length) {
+      handleFiles(evt.dataTransfer.files);
+    }
   });
-  fileInput.addEventListener('change', e => {
-    handleSelectedFiles(e.target.files);
+  fileInput.addEventListener('change', (evt) => {
+    handleFiles(evt.target.files);
   });
 
-  function handleSelectedFiles(files) {
-    for (const f of files) {
-      selectedFiles.push(f);
+  function handleFiles(files) {
+    for (let i = 0; i < files.length; i++) {
+      selectedFiles.push(files[i]);
     }
     renderSelectedFiles();
   }
@@ -603,119 +706,175 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     startFileTransferBtn.disabled = false;
-    selectedFiles.forEach((file, i) => {
+    selectedFiles.forEach((file, idx) => {
       const div = document.createElement('div');
       div.className = 'selected-file-item';
       const span = document.createElement('span');
       span.className = 'selected-file-name';
       span.textContent = file.name;
-      const removeIcon = document.createElement('i');
-      removeIcon.className = 'fas fa-trash text-red-500 cursor-pointer';
-      removeIcon.addEventListener('click', () => {
-        selectedFiles.splice(i, 1);
+      const trash = document.createElement('i');
+      trash.className = 'fas fa-trash text-red-500 cursor-pointer';
+      trash.addEventListener('click', () => {
+        selectedFiles.splice(idx, 1);
         renderSelectedFiles();
       });
       div.appendChild(span);
-      div.appendChild(removeIcon);
+      div.appendChild(trash);
       selectedFilesContainer.appendChild(div);
     });
   }
 
   sendFilesCancelBtn.addEventListener('click', () => {
     sendFilesModal.style.display = 'none';
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
     selectedFiles = [];
-    renderSelectedFiles();
+  });
+  sendFilesBackdrop.addEventListener('click', () => {
+    sendFilesModal.style.display = 'none';
+    server.send({ type: 'transfer-cancel', to: currentRecipientId });
+    selectedFiles = [];
   });
 
   startFileTransferBtn.addEventListener('click', () => {
     if (!currentRecipientId || !selectedFiles.length) return;
-    const peer = peersManager.getPeerById(currentRecipientId);
-    if (!peer) return;
-    // Send them
-    peer.sendFiles(selectedFiles);
     sendFilesModal.style.display = 'none';
+
+    // We'll chunk the files over the datachannel
+    const rtpw = peersMgr.ensureRTCPeer(currentRecipientId, true);
+    // For each file => do Snapdrop style chunking
+    (async function sendAll() {
+      for (const file of selectedFiles) {
+        // 1) send a "header"
+        const header = JSON.stringify({
+          type: 'header',
+          name: file.name,
+          size: file.size,
+          mime: file.type
+        });
+        rtpw.sendData(header);
+
+        // 2) chunk
+        const chunkSize = 65536;
+        let offset = 0;
+        while (offset < file.size) {
+          const slice = file.slice(offset, offset + chunkSize);
+          const buffer = await slice.arrayBuffer();
+          rtpw.sendData(buffer);
+          offset += buffer.byteLength;
+          // small pause
+          await new Promise((res) => setTimeout(res, 0));
+        }
+
+        // 3) done
+        const doneMsg = JSON.stringify({ type: 'done' });
+        rtpw.sendData(doneMsg);
+      }
+      // show "transfer-complete" for the user
+      document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
+      document.getElementById('transfer-complete-text').textContent =
+        `Your file(s) have been delivered.`;
+      document.getElementById('transfer-complete-modal').style.display = 'flex';
+    })();
+
     selectedFiles = [];
     renderSelectedFiles();
   });
 
-  //
-  // Receiving Files
-  //
+  // Receiving side: if we see "rtc-data" with "header"/"done" or chunk => reassemble
   const receivingFilesModal = document.getElementById('receiving-files-modal');
   const fileProgressList = document.getElementById('file-progress-list');
-  Evt.on('incoming-file', e => {
-    // e.detail => { name, size, mime }
-    receivingFilesModal.style.display = 'flex';
-    const fileInfo = e.detail;
-    const container = document.createElement('div');
-    container.className = 'w-full mb-4';
-    const label = document.createElement('p');
-    label.textContent = fileInfo.name;
-    label.className = 'text-sm mb-1 text-[#333533]';
-    const progressBarContainer = document.createElement('div');
-    progressBarContainer.className = 'file-progress-bar-container';
-    const progressBar = document.createElement('div');
-    progressBar.className = 'file-progress-bar';
-    progressBar.style.width = '0%';
-    progressBarContainer.appendChild(progressBar);
-    container.appendChild(label);
-    container.appendChild(progressBarContainer);
-    fileProgressList.appendChild(container);
-
-    // store a reference to update later
-    fileInfo._progressBar = progressBar;
-  });
-
-  Evt.on('file-progress', e => {
-    const progress = e.detail.progress;
-    // if we wanted, we could track multiple files. For brevity, let's just update the last bar
-    // or you can store them in an array keyed by name, etc.
-    // We'll do a simple approach: find the last child in fileProgressList
-    const last = fileProgressList.lastElementChild;
-    if (!last) return;
-    const bar = last.querySelector('.file-progress-bar');
-    if (bar) bar.style.width = Math.floor(progress * 100) + '%';
-  });
-
-  // When the file is fully received
+  let incomingFileDigester = null;
   let receivedFiles = [];
-  Evt.on('file-received', e => {
-    const { name, blob } = e.detail;
-    receivedFiles.push({ name, blob });
-    console.log('[RTC] Received file =>', name);
 
-    // Optionally close the receiving modal if you want after a short time
-    // Or if user is receiving multiple files, keep it open until they are all done.
-    // Let's keep it open until user closes. If you want it auto-close, do:
-    // receivingFilesModal.style.display = 'none';
+  Evt.on('rtc-data', (e) => {
+    const { data, fromId } = e.detail;
+    if (typeof data === 'string') {
+      // maybe JSON?
+      let obj;
+      try {
+        obj = JSON.parse(data);
+      } catch {
+        return;
+      }
+      if (obj.type === 'header') {
+        // open receiving-files-modal
+        receivingFilesModal.style.display = 'flex';
+        incomingFileDigester = {
+          name: obj.name,
+          size: obj.size,
+          mime: obj.mime,
+          chunks: [],
+          bytes: 0
+        };
+        // create a progress bar
+        const container = document.createElement('div');
+        container.className = 'w-full mb-4';
+        const label = document.createElement('p');
+        label.className = 'text-sm mb-1 text-[#333533]';
+        label.textContent = obj.name;
+        const barC = document.createElement('div');
+        barC.className = 'file-progress-bar-container';
+        const bar = document.createElement('div');
+        bar.className = 'file-progress-bar';
+        bar.style.width = '0%';
+        barC.appendChild(bar);
+        container.appendChild(label);
+        container.appendChild(barC);
+        fileProgressList.appendChild(container);
+        incomingFileDigester._bar = bar;
+
+        // hide "receiving-status-modal"
+        document.getElementById('receiving-status-modal').style.display = 'none';
+      } else if (obj.type === 'done') {
+        if (!incomingFileDigester) return;
+        // finalize
+        const { name, mime, size, chunks } = incomingFileDigester;
+        const blob = new Blob(chunks, { type: mime });
+        receivedFiles.push({ name, blob });
+
+        // reset
+        incomingFileDigester = null;
+
+        // open file-preview-modal automatically:
+        const fpModal = document.getElementById('file-preview-modal');
+        fpModal.style.display = 'flex';
+        renderFilePreview(receivedFiles.length - 1);
+
+        // we can also send "transfer-complete" to the sender
+        server.send({
+          type: 'transfer-complete',
+          to: fromId
+        });
+      }
+    } else {
+      // array buffer => chunk
+      if (incomingFileDigester) {
+        incomingFileDigester.chunks.push(data);
+        incomingFileDigester.bytes += data.byteLength;
+        const pct = Math.floor((incomingFileDigester.bytes / incomingFileDigester.size) * 100);
+        if (incomingFileDigester._bar) {
+          incomingFileDigester._bar.style.width = pct + '%';
+        }
+      }
+    }
   });
 
-  // If you want a "File Preview" modal, we can attach it once all files done,
-  // but Snapdrop just auto-triggers a download. We'll do your "Preview" approach:
+  // file-preview logic
   const filePreviewModal = document.getElementById('file-preview-modal');
   const filePreviewContent = document.getElementById('file-preview-content');
-  let currentPreviewIndex = 0;
-
-  // Let's override the old "file-transfer-finished" approach with a simple button to open a preview
-  // or do it after each file is done, etc. We'll keep it simpler: once we get a new file, show the preview.
-  Evt.on('file-received', () => {
-    // Show the preview for the newly added file
-    filePreviewModal.style.display = 'flex';
-    currentPreviewIndex = receivedFiles.length - 1;
-    renderPreviewSlide(currentPreviewIndex);
-  });
-
-  function renderPreviewSlide(i) {
+  let currentFileIndex = 0;
+  function renderFilePreview(i) {
     if (i < 0 || i >= receivedFiles.length) return;
+    currentFileIndex = i;
     filePreviewContent.innerHTML = '';
     const { name, blob } = receivedFiles[i];
-    // check if image
+    // if image
     if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) {
       const imgUrl = URL.createObjectURL(blob);
-      const imgEl = document.createElement('img');
-      imgEl.src = imgUrl;
-      imgEl.className = 'max-w-full max-h-[400px] object-contain';
-      filePreviewContent.appendChild(imgEl);
+      const img = document.createElement('img');
+      img.src = imgUrl;
+      img.className = 'max-w-full max-h-[400px] object-contain';
+      filePreviewContent.appendChild(img);
     } else {
       const icon = document.createElement('i');
       icon.className = 'fas fa-file fa-5x mb-2';
@@ -725,62 +884,77 @@ document.addEventListener('DOMContentLoaded', () => {
       filePreviewContent.appendChild(p);
     }
   }
-
   document.getElementById('prev-file-btn').addEventListener('click', () => {
-    currentPreviewIndex = Math.max(0, currentPreviewIndex - 1);
-    renderPreviewSlide(currentPreviewIndex);
+    if (currentFileIndex > 0) {
+      currentFileIndex--;
+      renderFilePreview(currentFileIndex);
+    }
   });
   document.getElementById('next-file-btn').addEventListener('click', () => {
-    currentPreviewIndex = Math.min(receivedFiles.length - 1, currentPreviewIndex + 1);
-    renderPreviewSlide(currentPreviewIndex);
+    if (currentFileIndex < receivedFiles.length - 1) {
+      currentFileIndex++;
+      renderFilePreview(currentFileIndex);
+    }
   });
   document.getElementById('file-preview-close').addEventListener('click', () => {
     filePreviewModal.style.display = 'none';
-    receivedFiles = []; // clear so user doesn't keep them
-    fileProgressList.innerHTML = ''; // also clear old progress
-    receivingFilesModal.style.display = 'none';
+    // clear if you like
   });
   document.getElementById('file-preview-backdrop').addEventListener('click', () => {
     filePreviewModal.style.display = 'none';
-    receivedFiles = [];
-    fileProgressList.innerHTML = '';
-    receivingFilesModal.style.display = 'none';
   });
 
   // Download buttons
   document.getElementById('download-current-file').addEventListener('click', () => {
     if (!receivedFiles.length) return;
-    const fileObj = receivedFiles[currentPreviewIndex];
-    triggerDownload(fileObj);
+    const { name, blob } = receivedFiles[currentFileIndex];
+    triggerDownload(name, blob);
   });
   document.getElementById('download-all-files').addEventListener('click', () => {
-    receivedFiles.forEach(f => triggerDownload(f));
+    receivedFiles.forEach((f) => triggerDownload(f.name, f.blob));
   });
 
-  function triggerDownload(fileObj) {
-    const url = URL.createObjectURL(fileObj.blob);
+  function triggerDownload(name, blob) {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileObj.name;
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   }
 
-  //
-  // If user or server disconnect => show modal
-  //
-  Evt.on('server-disconnected', () => {
-    const modal = document.getElementById('server-disconnected-modal');
-    modal.style.display = 'flex';
+  // Transfer complete modal
+  Evt.on('transfer-complete', (e) => {
+    // if I'm the sender, show a success
+    document.getElementById('transfer-complete-title').textContent = 'Transfer Complete';
+    document.getElementById('transfer-complete-text').textContent =
+      'Your transfer is complete!';
+    document.getElementById('transfer-complete-modal').style.display = 'flex';
   });
+  const tcClose = document.getElementById('transfer-complete-close');
+  const tcBackdrop = document.getElementById('transfer-complete-backdrop');
+  tcClose.addEventListener('click', () => {
+    document.getElementById('transfer-complete-modal').style.display = 'none';
+  });
+  tcBackdrop.addEventListener('click', () => {
+    document.getElementById('transfer-complete-modal').style.display = 'none';
+  });
+
+  // Peer lost modal
+  document.getElementById('peer-lost-close').addEventListener('click', () => {
+    document.getElementById('peer-lost-modal').style.display = 'none';
+  });
+  document.getElementById('peer-lost-backdrop').addEventListener('click', () => {
+    document.getElementById('peer-lost-modal').style.display = 'none';
+  });
+
+  // server-disconnected
   document.getElementById('server-disconnected-close').addEventListener('click', () => {
     document.getElementById('server-disconnected-modal').style.display = 'none';
   });
 
-  //
   // Info & Author modals
-  //
   document.getElementById('info-button').addEventListener('click', () => {
     document.getElementById('info-modal').style.display = 'flex';
   });
@@ -800,8 +974,4 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('author-modal-backdrop').addEventListener('click', () => {
     document.getElementById('author-modal').style.display = 'none';
   });
-
-  //
-  // That's it! The result is Snapdrop-like behavior using WebRTC data channels.
-  //
 });

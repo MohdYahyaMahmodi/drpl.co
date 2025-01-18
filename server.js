@@ -7,8 +7,9 @@ import parser from 'ua-parser-js';
 /*************************************************************
  * server.js
  *  - Maintains peer discovery in "rooms" by IP
- *  - Forwards "signal" messages for WebRTC offer/answer/ICE
- *  - Extended keep-alive to avoid timeouts
+ *  - Relays messages: "signal" for WebRTC, plus "transfer-request",
+ *    "transfer-accept", "transfer-decline", etc. 
+ *  - Generates a random display name from ID for each peer
  *************************************************************/
 
 // Word lists for generating random display names
@@ -25,7 +26,7 @@ const nounsList = [
   'Griffin', 'Octopus'
 ];
 
-// A simple function to produce a consistent displayName
+// Generate a nice codename
 function getDisplayName(id) {
   const hash1 = (id + 'adjective').hashCode();
   const hash2 = (id + 'noun').hashCode();
@@ -34,14 +35,14 @@ function getDisplayName(id) {
   return `${adjective} ${noun}`;
 }
 
-// Extend String prototype for quick hash
+// Extend String prototype for hashing
 Object.defineProperty(String.prototype, 'hashCode', {
   value: function() {
-    let hash = 0, i, chr;
-    for (i = 0; i < this.length; i++) {
-      chr = this.charCodeAt(i);
+    let hash = 0;
+    for (let i = 0; i < this.length; i++) {
+      const chr = this.charCodeAt(i);
       hash = (hash << 5) - hash + chr;
-      hash |= 0; // Convert to 32bit integer
+      hash |= 0; // Convert to 32-bit int
     }
     return hash;
   }
@@ -57,7 +58,7 @@ process.on('SIGTERM', () => {
 });
 
 const app = express();
-app.use(express.static('public')); // Serve the static files from ./public
+app.use(express.static('public'));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -66,6 +67,7 @@ class DrplServer {
   constructor(wss) {
     this._wss = wss;
     this._rooms = {}; // { ip: { peerId: Peer } }
+
     this._wss.on('connection', (socket, request) => this._onConnection(new Peer(socket, request)));
     this._wss.on('headers', (headers, response) => this._onHeaders(headers, response));
     console.log('Drpl.co server is running.');
@@ -80,11 +82,12 @@ class DrplServer {
 
   _onConnection(peer) {
     this._joinRoom(peer);
-    peer.socket.on('message', msg => this._onMessage(peer, msg));
+
+    peer.socket.on('message', data => this._onMessage(peer, data));
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // send display name to the new peer
+    // Immediately send this peer's random codename
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -93,48 +96,69 @@ class DrplServer {
         deviceName: peer.name.deviceName
       }
     });
-
-    this._keepAlive(peer);
   }
 
-  _onMessage(sender, message) {
+  _onMessage(sender, data) {
     let msg;
     try {
-      msg = JSON.parse(message);
-    } catch (e) {
-      return; // malformed
+      msg = JSON.parse(data);
+    } catch {
+      return; // ignore malformed JSON
     }
 
     switch (msg.type) {
-      case 'disconnect':
-        this._leaveRoom(sender);
+      case 'introduce': {
+        // no-op except we might store deviceType if needed
+        sender.name.type = msg.name.deviceType;
+        // after joining, we can send an updated "peer-updated" if we wish
+        this._notifyPeersAboutUpdate(sender);
+        // also send the peer list to the new user
+        this._sendPeersList(sender);
         break;
-      case 'pong':
-        sender.lastBeat = Date.now();
-        break;
+      }
       case 'signal': {
-        // WebRTC signaling => forward to the intended peer
-        if (!this._rooms[sender.ip]) return;
-        const recipientId = msg.to;
-        const recipient = this._rooms[sender.ip][recipientId];
-        if (!recipient) return;
-        delete msg.to;
-        msg.sender = sender.id;
-        this._send(recipient, msg);
+        // forward to the intended peer for WebRTC
+        const recipient = this._getRecipient(sender.ip, msg.to);
+        if (recipient) {
+          delete msg.to;
+          msg.sender = sender.id;
+          this._send(recipient, msg);
+        }
+        break;
+      }
+      case 'transfer-request':
+      case 'transfer-accept':
+      case 'transfer-decline':
+      case 'transfer-cancel':
+      case 'send-message':
+      case 'pong':
+      case 'disconnect':
+      case 'transfer-complete':
+      case 'transfer-error': {
+        // Just forward to the "to" peer
+        const recipient = this._getRecipient(sender.ip, msg.to);
+        if (recipient) {
+          delete msg.to;
+          msg.sender = sender.id;
+          this._send(recipient, msg);
+        }
         break;
       }
       default:
-        // ignoring other message types
+        // ignoring unrecognized
         break;
     }
   }
 
-  _joinRoom(peer) {
-    if (!this._rooms[peer.ip]) {
-      this._rooms[peer.ip] = {};
-    }
+  _getRecipient(ip, peerId) {
+    if (!this._rooms[ip]) return null;
+    return this._rooms[ip][peerId] || null;
+  }
 
-    // tell existing peers that this new peer joined
+  _joinRoom(peer) {
+    if (!this._rooms[peer.ip]) this._rooms[peer.ip] = {};
+
+    // notify existing peers that this new peer joined
     for (const otherPeerId in this._rooms[peer.ip]) {
       const otherPeer = this._rooms[peer.ip][otherPeerId];
       this._send(otherPeer, {
@@ -143,28 +167,51 @@ class DrplServer {
       });
     }
 
-    // let the new peer know about existing peers
-    const otherPeersInfo = [];
-    for (const otherPeerId in this._rooms[peer.ip]) {
-      otherPeersInfo.push(this._rooms[peer.ip][otherPeerId].getInfo());
-    }
-    this._send(peer, { type: 'peers', peers: otherPeersInfo });
+    // send the new peer a list of existing peers
+    this._sendPeersList(peer);
 
-    // add to the room
+    // add new peer
     this._rooms[peer.ip][peer.id] = peer;
+  }
+
+  _sendPeersList(peer) {
+    const peersArray = [];
+    for (const pid in this._rooms[peer.ip]) {
+      if (pid !== peer.id) {
+        peersArray.push(this._rooms[peer.ip][pid].getInfo());
+      }
+    }
+    this._send(peer, { type: 'peers', peers: peersArray });
+  }
+
+  _notifyPeersAboutUpdate(peer) {
+    // if you want to broadcast that a peer's info changed
+    const room = this._rooms[peer.ip];
+    if (!room) return;
+    for (const pid in room) {
+      if (pid !== peer.id) {
+        this._send(room[pid], {
+          type: 'peer-updated',
+          peer: peer.getInfo()
+        });
+      }
+    }
   }
 
   _leaveRoom(peer) {
     if (!this._rooms[peer.ip] || !this._rooms[peer.ip][peer.id]) return;
-    this._cancelKeepAlive(peer);
     delete this._rooms[peer.ip][peer.id];
     peer.socket.terminate();
+
     if (!Object.keys(this._rooms[peer.ip]).length) {
       delete this._rooms[peer.ip];
     } else {
       // notify others
       for (const pid in this._rooms[peer.ip]) {
-        this._send(this._rooms[peer.ip][pid], { type: 'peer-left', peerId: peer.id });
+        this._send(this._rooms[peer.ip][pid], {
+          type: 'peer-left',
+          peerId: peer.id
+        });
       }
     }
   }
@@ -172,24 +219,6 @@ class DrplServer {
   _send(peer, msg) {
     if (peer.socket.readyState === peer.socket.OPEN) {
       peer.socket.send(JSON.stringify(msg));
-    }
-  }
-
-  _keepAlive(peer) {
-    this._cancelKeepAlive(peer);
-    const timeout = 30000; // 30s
-    if (!peer.lastBeat) peer.lastBeat = Date.now();
-    if (Date.now() - peer.lastBeat > 2 * timeout) {
-      this._leaveRoom(peer);
-      return;
-    }
-    this._send(peer, { type: 'ping' });
-    peer.timerId = setTimeout(() => this._keepAlive(peer), timeout);
-  }
-
-  _cancelKeepAlive(peer) {
-    if (peer && peer.timerId) {
-      clearTimeout(peer.timerId);
     }
   }
 }
@@ -200,9 +229,6 @@ class Peer {
     this._setIP(request);
     this._setPeerId(request);
     this._setName(request);
-    this.rtcSupported = true; // for demonstration
-    this.timerId = 0;
-    this.lastBeat = Date.now();
   }
 
   _setIP(request) {
@@ -220,13 +246,9 @@ class Peer {
     if (request.peerId) {
       this.id = request.peerId;
     } else {
-      const cookies = request.headers.cookie || '';
-      const match = cookies.match(/peerid=([^;]+)/);
-      if (match) {
-        this.id = match[1];
-      } else {
-        this.id = Peer.uuid();
-      }
+      const ck = request.headers.cookie || '';
+      const match = ck.match(/peerid=([^;]+)/);
+      this.id = match ? match[1] : Peer.uuid();
     }
   }
 
@@ -242,8 +264,8 @@ class Peer {
       deviceName += ua.browser.name || '';
     }
     if (!deviceName) deviceName = 'Unknown Device';
-    const displayName = getDisplayName(this.id);
 
+    const displayName = getDisplayName(this.id);
     this.name = {
       model: ua.device.model,
       os: ua.os.name,
@@ -258,7 +280,7 @@ class Peer {
     return {
       id: this.id,
       name: this.name,
-      rtcSupported: this.rtcSupported
+      rtcSupported: true
     };
   }
 
@@ -279,8 +301,7 @@ class Peer {
   }
 }
 
-const port = process.env.PORT || 3002;
-server.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+server.listen(process.env.PORT || 3002, () => {
+  console.log(`Server listening on port ${process.env.PORT || 3002}`);
   new DrplServer(wss);
 });
