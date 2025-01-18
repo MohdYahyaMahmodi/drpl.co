@@ -7,9 +7,8 @@ import parser from 'ua-parser-js';
 /*************************************************************
  * server.js
  *  - Maintains peer discovery in "rooms" by IP
- *  - Relays messages (transfer-request, file-chunk, etc.)
- *  - Generates a random display name from ID
- *  - Keep-alive now extended so big file transfers are not cut.
+ *  - Forwards "signal" messages for WebRTC offer/answer/ICE
+ *  - Extended keep-alive to avoid timeouts
  *************************************************************/
 
 // Word lists for generating random display names
@@ -58,44 +57,34 @@ process.on('SIGTERM', () => {
 });
 
 const app = express();
-app.use(express.static('public')); // Serve everything in ./public as static
+app.use(express.static('public')); // Serve the static files from ./public
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-class FileDropServer {
+class DrplServer {
   constructor(wss) {
     this._wss = wss;
     this._rooms = {}; // { ip: { peerId: Peer } }
-
-    this._wss.on('connection', (socket, request) =>
-      this._onConnection(new Peer(socket, request))
-    );
-    this._wss.on('headers', (headers, response) =>
-      this._onHeaders(headers, response)
-    );
-
-    console.log('Drpl.co server is running');
+    this._wss.on('connection', (socket, request) => this._onConnection(new Peer(socket, request)));
+    this._wss.on('headers', (headers, response) => this._onHeaders(headers, response));
+    console.log('Drpl.co server is running.');
   }
 
   _onHeaders(headers, response) {
-    // If no cookie yet, create a peerId
     if (!response.headers.cookie || !response.headers.cookie.includes('peerid=')) {
       response.peerId = Peer.uuid();
-      headers.push(
-        'Set-Cookie: peerid=' + response.peerId + '; SameSite=Strict; Secure'
-      );
+      headers.push('Set-Cookie: peerid=' + response.peerId + '; SameSite=Strict; Secure');
     }
   }
 
   _onConnection(peer) {
     this._joinRoom(peer);
-
-    peer.socket.on('message', (msg) => this._onMessage(peer, msg));
+    peer.socket.on('message', msg => this._onMessage(peer, msg));
     peer.socket.on('close', () => this._leaveRoom(peer));
     peer.socket.on('error', console.error);
 
-    // Send the peer's random display name right away
+    // send display name to the new peer
     this._send(peer, {
       type: 'display-name',
       message: {
@@ -108,39 +97,34 @@ class FileDropServer {
     this._keepAlive(peer);
   }
 
-  _onMessage(sender, data) {
+  _onMessage(sender, message) {
     let msg;
     try {
-      msg = JSON.parse(data);
+      msg = JSON.parse(message);
     } catch (e) {
-      return;
+      return; // malformed
     }
 
     switch (msg.type) {
-      case 'introduce':
-        // Save the device type for the peer, notify others
-        sender.name.type = msg.name.deviceType;
-        this._notifyPeersAboutUpdate(sender);
-        this._sendPeersList(sender);
-        break;
-
       case 'disconnect':
         this._leaveRoom(sender);
         break;
-
       case 'pong':
         sender.lastBeat = Date.now();
         break;
-
+      case 'signal': {
+        // WebRTC signaling => forward to the intended peer
+        if (!this._rooms[sender.ip]) return;
+        const recipientId = msg.to;
+        const recipient = this._rooms[sender.ip][recipientId];
+        if (!recipient) return;
+        delete msg.to;
+        msg.sender = sender.id;
+        this._send(recipient, msg);
+        break;
+      }
       default:
-        // Relay if there's a "to" field
-        if (msg.to && this._rooms[sender.ip]) {
-          const recipient = this._rooms[sender.ip][msg.to];
-          if (!recipient) return;
-          delete msg.to;
-          msg.sender = sender.id;
-          this._send(recipient, msg);
-        }
+        // ignoring other message types
         break;
     }
   }
@@ -150,76 +134,51 @@ class FileDropServer {
       this._rooms[peer.ip] = {};
     }
 
-    // Notify existing peers that someone joined
-    for (const otherId in this._rooms[peer.ip]) {
-      this._send(this._rooms[peer.ip][otherId], {
+    // tell existing peers that this new peer joined
+    for (const otherPeerId in this._rooms[peer.ip]) {
+      const otherPeer = this._rooms[peer.ip][otherPeerId];
+      this._send(otherPeer, {
         type: 'peer-joined',
         peer: peer.getInfo()
       });
     }
-    // Send the new peer the existing peers list
-    this._sendPeersList(peer);
 
-    // Add the new peer
+    // let the new peer know about existing peers
+    const otherPeersInfo = [];
+    for (const otherPeerId in this._rooms[peer.ip]) {
+      otherPeersInfo.push(this._rooms[peer.ip][otherPeerId].getInfo());
+    }
+    this._send(peer, { type: 'peers', peers: otherPeersInfo });
+
+    // add to the room
     this._rooms[peer.ip][peer.id] = peer;
   }
 
   _leaveRoom(peer) {
     if (!this._rooms[peer.ip] || !this._rooms[peer.ip][peer.id]) return;
-
     this._cancelKeepAlive(peer);
     delete this._rooms[peer.ip][peer.id];
     peer.socket.terminate();
-
-    // If the room is empty, remove it
     if (!Object.keys(this._rooms[peer.ip]).length) {
       delete this._rooms[peer.ip];
     } else {
-      // Notify others that this peer left
-      for (const otherId in this._rooms[peer.ip]) {
-        this._send(this._rooms[peer.ip][otherId], {
-          type: 'peer-left',
-          peerId: peer.id
-        });
+      // notify others
+      for (const pid in this._rooms[peer.ip]) {
+        this._send(this._rooms[peer.ip][pid], { type: 'peer-left', peerId: peer.id });
       }
     }
   }
 
-  _notifyPeersAboutUpdate(peer) {
-    const room = this._rooms[peer.ip];
-    if (!room) return;
-    for (const pid in room) {
-      if (pid !== peer.id) {
-        this._send(room[pid], { type: 'peer-updated', peer: peer.getInfo() });
-      }
+  _send(peer, msg) {
+    if (peer.socket.readyState === peer.socket.OPEN) {
+      peer.socket.send(JSON.stringify(msg));
     }
   }
 
-  _sendPeersList(peer) {
-    const room = this._rooms[peer.ip];
-    const others = [];
-    for (const pid in room) {
-      if (pid !== peer.id) {
-        others.push(room[pid].getInfo());
-      }
-    }
-    this._send(peer, {
-      type: 'peers',
-      peers: others
-    });
-  }
-
-  /**
-   * Extend the keep-alive interval so large transfers are not cut off.
-   */
   _keepAlive(peer) {
     this._cancelKeepAlive(peer);
-    // Increased from 5s to 60s
-    const timeout = 60 * 1000; // 1 minute
-    // We allow 2 * timeout (2 minutes) of no "pong" before dropping
-    if (!peer.lastBeat) {
-      peer.lastBeat = Date.now();
-    }
+    const timeout = 30000; // 30s
+    if (!peer.lastBeat) peer.lastBeat = Date.now();
     if (Date.now() - peer.lastBeat > 2 * timeout) {
       this._leaveRoom(peer);
       return;
@@ -233,12 +192,6 @@ class FileDropServer {
       clearTimeout(peer.timerId);
     }
   }
-
-  _send(peer, msg) {
-    if (peer.socket.readyState === 1) {
-      peer.socket.send(JSON.stringify(msg));
-    }
-  }
 }
 
 class Peer {
@@ -247,7 +200,7 @@ class Peer {
     this._setIP(request);
     this._setPeerId(request);
     this._setName(request);
-    this.rtcSupported = true; // Potentially used if you integrate WebRTC
+    this.rtcSupported = true; // for demonstration
     this.timerId = 0;
     this.lastBeat = Date.now();
   }
@@ -289,8 +242,8 @@ class Peer {
       deviceName += ua.browser.name || '';
     }
     if (!deviceName) deviceName = 'Unknown Device';
-
     const displayName = getDisplayName(this.id);
+
     this.name = {
       model: ua.device.model,
       os: ua.os.name,
@@ -313,9 +266,7 @@ class Peer {
     let uuid = '';
     for (let i = 0; i < 32; i++) {
       const random = (Math.random() * 16) | 0;
-      if (i === 8 || i === 12 || i === 16 || i === 20) {
-        uuid += '-';
-      }
+      if (i === 8 || i === 12 || i === 16 || i === 20) uuid += '-';
       if (i === 12) {
         uuid += '4';
       } else if (i === 16) {
@@ -331,5 +282,5 @@ class Peer {
 const port = process.env.PORT || 3002;
 server.listen(port, () => {
   console.log(`Server listening on port ${port}`);
-  new FileDropServer(wss);
+  new DrplServer(wss);
 });

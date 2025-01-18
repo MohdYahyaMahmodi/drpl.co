@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS (with version for cache-busting) -->
-  <link rel="stylesheet" href="styles.css?v=5.0.4" />
+  <link rel="stylesheet" href="styles.css?v=6.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -110,7 +110,7 @@
             <li>Open Drpl.co on both devices</li>
             <li>Select the receiving device</li>
             <li>Choose files to send or send a message</li>
-            <li>Transfer is done directly and securely</li>
+            <li>Transfers happen directly using WebRTC</li>
           </ul>
         </div>
 
@@ -215,7 +215,7 @@
       <h2 class="text-xl font-semibold text-[#242423] mb-4">Choose Action</h2>
       <p class="text-[#333533] mb-1" id="choose-action-device-name"></p>
       <p class="text-[#333533] text-sm opacity-75 mb-4">
-        (You can easily send a few hundred MB of files!)
+        (WebRTC is used, so transfers are super fast!)
       </p>
       <div class="flex flex-col space-y-4">
         <button
@@ -463,10 +463,6 @@
     </div>
   </div>
 
-  <!-- ================================
-       NEW MODALS FOR FILE TRANSFER
-       ================================ -->
-
   <!-- Send Files Modal (sender side) -->
   <div
     id="send-files-modal"
@@ -502,7 +498,6 @@
         id="selected-files-container"
         class="overflow-y-auto max-h-48 mb-4"
       >
-        <!-- Dynamically populated with file names/icons -->
       </div>
       <div class="flex justify-end space-x-4">
         <button
@@ -545,7 +540,6 @@
         id="file-progress-list"
         class="space-y-4"
       >
-        <!-- Each file's progress bar will be rendered here -->
       </div>
     </div>
   </div>
@@ -576,7 +570,6 @@
         id="file-preview-content"
         class="flex flex-col items-center justify-center"
       >
-        <!-- Slideshow area: we'll dynamically fill it -->
       </div>
 
       <!-- Updated layout for the nav & download buttons -->
@@ -617,6 +610,6 @@
   </div>
 
   <!-- Main JS -->
-  <script src="main.js?v=5.0.4"></script>
+  <script src="main.js?v=6.0.0"></script>
 </body>
 </html>
