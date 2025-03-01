@@ -1,18 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Drpl.co - Share files Locally</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#ffffff">
-    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#121212"> <!-- Updated to dark theme color -->
+    <meta name="color-scheme" content="dark light"> <!-- Prefer dark -->
     <meta name="description" content="Instantly share files with people on the same network. No setup, no signup.">
     
+    <!-- Preload theme script - MUST come before CSS -->
+    <script>
+      // Immediately apply theme before page renders to prevent flash
+      (function() {
+        var savedTheme = localStorage.getItem('theme') || 'dark'; // Default to dark
+        if (savedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    
     <!-- Styles -->
-    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="styles.css?v=1.0.1">
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -32,6 +43,9 @@
             </a>
         </div>
         <div class="header-right">
+            <button id="theme-toggle" class="icon-button" title="Toggle dark mode">
+                <i class="fas fa-sun"></i>
+            </button>
             <a href="#about" class="icon-button" title="About drpl.co">
                 <i class="fas fa-info-circle"></i>
             </a>
@@ -211,9 +225,9 @@
     <audio id="sent-sound" src="sent.mp3" preload="auto"></audio>
 
     <!-- Scripts -->
-    <script src="background.js"></script>
-    <script src="network.js"></script>
-    <script src="ui.js"></script>
-    <script src="notifications.js"></script>
+    <script src="network.js?v=1.0.1"></script>
+    <script src="ui.js?v=1.0.1"></script>
+    <script src="notifications.js?v=1.0.1"></script>
+    <script src="theme.js?v=1.0.1"></script>
 </body>
 </html>
