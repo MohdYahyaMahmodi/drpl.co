@@ -3,14 +3,6 @@ const $ = id => document.getElementById(id);
 const isURL = text => /^((https?:\/\/|www)[^\s]+)/g.test(text.toLowerCase());
 const isDownloadSupported = typeof document.createElement('a').download !== 'undefined';
 
-// Security helper to prevent XSS attacks
-const sanitizeText = (text) => {
-    if (typeof text !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
-
 // UI classes
 class DrplUI {
     constructor() {
@@ -69,9 +61,6 @@ class DrplUI {
         if (peerElement) {
             peerElement.remove();
         }
-        
-        // We don't close dialogs when peers leave, files should still be accessible
-        // This comment is intentionally left here to document the change
     }
 
     onDisplayName(data) {
@@ -108,7 +97,7 @@ class DrplUI {
 
     showToast(message) {
         const toast = $('toast');
-        toast.textContent = sanitizeText(message);
+        toast.textContent = message;
         toast.classList.add('active');
         
         setTimeout(() => {
@@ -128,17 +117,13 @@ class DrplUI {
         const deviceType = this.getDeviceType(peer.name);
         const deviceIcon = this.getDeviceIcon(deviceType);
         
-        // Use sanitized values to prevent XSS
-        const displayName = sanitizeText(peer.name.displayName);
-        const deviceName = sanitizeText(peer.name.deviceName);
-        
         peerElement.innerHTML = `
             <div class="peer-icon">
                 <i class="${deviceIcon}"></i>
             </div>
             <div class="progress-circle"></div>
-            <div class="peer-name">${displayName}</div>
-            <div class="peer-device">${deviceName}</div>
+            <div class="peer-name">${peer.name.displayName}</div>
+            <div class="peer-device">${peer.name.deviceName}</div>
         `;
         
         peerElement.addEventListener('click', () => {
@@ -213,16 +198,12 @@ class ReceiveDialog extends Dialog {
         this.currentIndex = 0;
         this._setupCarousel();
         this._setupDownloadButtons();
-        this._setupTouchEvents();
     }
 
     _setupCarousel() {
-        // Navigation buttons - using onclick instead of addEventListener for better compatibility
-        const prevButton = $('carousel-prev');
-        const nextButton = $('carousel-next');
-        
-        prevButton.onclick = () => this.showPreviousFile();
-        nextButton.onclick = () => this.showNextFile();
+        // Navigation buttons
+        $('carousel-prev').addEventListener('click', () => this.showPreviousFile());
+        $('carousel-next').addEventListener('click', () => this.showNextFile());
         
         // Item container
         this.carouselContainer = this.element.querySelector('.carousel-item-container');
@@ -247,45 +228,18 @@ class ReceiveDialog extends Dialog {
         });
     }
 
-    _setupTouchEvents() {
-        // Add touch swipe support for mobile
-        let touchStartX = 0;
-        let touchEndX = 0;
-        
-        this.carouselContainer.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, { passive: true });
-        
-        this.carouselContainer.addEventListener('touchend', (e) => {
-            touchEndX = e.changedTouches[0].screenX;
-            this._handleSwipe(touchStartX, touchEndX);
-        }, { passive: true });
-    }
-    
-    _handleSwipe(startX, endX) {
-        const threshold = 50; // Minimum pixel distance for a swipe
-        
-        if (startX - endX > threshold) {
-            // Swipe left, show next file
-            this.showNextFile();
-        } else if (endX - startX > threshold) {
-            // Swipe right, show previous file
-            this.showPreviousFile();
-        }
-    }
-
     // Add a file to the carousel
     addFile(file) {
         // Add to files array
         this.files.push(file);
         
+        // Update title and counter
+        this._updateFileCounter();
+        
         // If this is the first file, display it
         if (this.files.length === 1) {
             this.show();
             this.displayCurrentFile();
-        } else {
-            // Just update counter if dialog is already visible
-            this._updateFileCounter();
         }
     }
     
@@ -294,11 +248,6 @@ class ReceiveDialog extends Dialog {
         if (this.files.length === 0) return;
         
         const file = this.files[this.currentIndex];
-        if (!file) {
-            console.error('No file found at index', this.currentIndex);
-            return;
-        }
-        
         const url = URL.createObjectURL(file.blob);
         
         // Clear the container
@@ -314,7 +263,7 @@ class ReceiveDialog extends Dialog {
         
         const fileName = document.createElement('div');
         fileName.className = 'file-name';
-        fileName.textContent = sanitizeText(file.name);
+        fileName.textContent = file.name;
         
         const fileSize = document.createElement('div');
         fileSize.className = 'file-size';
@@ -324,9 +273,6 @@ class ReceiveDialog extends Dialog {
         fileInfo.appendChild(fileSize);
         fileItem.appendChild(fileInfo);
         
-        // Extract file extension
-        const fileExt = this._getFileExtension(file.name);
-        
         // Preview if it's an image
         if (file.mime.startsWith('image/')) {
             const preview = document.createElement('div');
@@ -334,7 +280,7 @@ class ReceiveDialog extends Dialog {
             
             const image = document.createElement('img');
             image.src = url;
-            image.alt = sanitizeText(file.name);
+            image.alt = file.name;
             image.className = 'carousel-image';
             
             preview.appendChild(image);
@@ -344,20 +290,10 @@ class ReceiveDialog extends Dialog {
             const fileIcon = document.createElement('div');
             fileIcon.className = 'file-icon';
             
-            const iconContainer = document.createElement('div');
-            iconContainer.className = 'file-type-container';
-            
             const icon = document.createElement('i');
             icon.className = this._getFileIconClass(file.mime);
             
-            // Add file extension display
-            const extLabel = document.createElement('div');
-            extLabel.className = 'file-extension';
-            extLabel.textContent = fileExt ? fileExt.toUpperCase() : 'FILE';
-            
-            iconContainer.appendChild(icon);
-            fileIcon.appendChild(iconContainer);
-            fileIcon.appendChild(extLabel);
+            fileIcon.appendChild(icon);
             fileItem.appendChild(fileIcon);
         }
         
@@ -365,7 +301,6 @@ class ReceiveDialog extends Dialog {
         this.carouselContainer.appendChild(fileItem);
         
         // Update navigation buttons
-        this._updateFileCounter();
         this._updateNavButtons();
     }
     
@@ -387,15 +322,8 @@ class ReceiveDialog extends Dialog {
     
     // Update file counter display
     _updateFileCounter() {
-        if (!this.files.length) return;
-        
-        const currentElem = $('current-file');
-        const totalElem = $('total-files');
-        
-        if (currentElem && totalElem) {
-            currentElem.textContent = this.currentIndex + 1;
-            totalElem.textContent = this.files.length;
-        }
+        $('current-file').textContent = this.currentIndex + 1;
+        $('total-files').textContent = this.files.length;
     }
     
     // Update navigation button states
@@ -403,33 +331,20 @@ class ReceiveDialog extends Dialog {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
-        if (!prevButton || !nextButton) return;
+        // Disable prev button if at first file
+        prevButton.disabled = this.currentIndex === 0;
+        prevButton.classList.toggle('disabled', this.currentIndex === 0);
         
-        // Use a simpler approach - just set disabled attribute and let CSS handle the styling
-        if (this.currentIndex <= 0) {
-            prevButton.setAttribute('disabled', 'disabled');
-        } else {
-            prevButton.removeAttribute('disabled');
-        }
+        // Disable next button if at last file
+        nextButton.disabled = this.currentIndex === this.files.length - 1;
+        nextButton.classList.toggle('disabled', this.currentIndex === this.files.length - 1);
         
-        if (this.currentIndex >= this.files.length - 1) {
-            nextButton.setAttribute('disabled', 'disabled');
-        } else {
-            nextButton.removeAttribute('disabled');
-        }
-    }
-    
-    // Get file extension
-    _getFileExtension(filename) {
-        if (!filename || typeof filename !== 'string') return '';
-        const parts = filename.split('.');
-        return parts.length > 1 ? parts.pop().toLowerCase() : '';
+        // Update counter
+        this._updateFileCounter();
     }
     
     // Get appropriate icon class based on file type
     _getFileIconClass(mimeType) {
-        if (!mimeType) return 'fas fa-file fa-4x';
-        
         if (mimeType.startsWith('image/')) {
             return 'fas fa-file-image fa-4x';
         } else if (mimeType.startsWith('video/')) {
@@ -448,8 +363,6 @@ class ReceiveDialog extends Dialog {
             return 'fas fa-file-excel fa-4x';
         } else if (mimeType.includes('powerpoint') || mimeType.includes('presentation') || mimeType.includes('ppt')) {
             return 'fas fa-file-powerpoint fa-4x';
-        } else if (mimeType.includes('executable') || mimeType.includes('application/x-msdownload')) {
-            return 'fas fa-file-code fa-4x';
         } else {
             return 'fas fa-file fa-4x';
         }
@@ -457,11 +370,6 @@ class ReceiveDialog extends Dialog {
     
     // Download a single file
     downloadFile(file) {
-        if (!file || !file.blob) {
-            console.error('Invalid file object:', file);
-            return;
-        }
-        
         const url = URL.createObjectURL(file.blob);
         const a = document.createElement('a');
         a.href = url;
@@ -519,8 +427,6 @@ class ReceiveDialog extends Dialog {
     }
     
     _formatFileSize(bytes) {
-        if (!bytes || isNaN(bytes)) return '0 Bytes';
-        
         if (bytes >= 1e9) {
             return (Math.round(bytes / 1e8) / 10) + ' GB';
         } else if (bytes >= 1e6) {
@@ -545,9 +451,7 @@ class ReceiveDialog extends Dialog {
         this.files = [];
         this.currentIndex = 0;
         this._updateFileCounter();
-        if (this.carouselContainer) {
-            this.carouselContainer.innerHTML = '';
-        }
+        this.carouselContainer.innerHTML = '';
     }
 }
 
@@ -622,11 +526,10 @@ class ReceiveTextDialog extends Dialog {
             const link = document.createElement('a');
             link.href = text.startsWith('http') ? text : `http://${text}`;
             link.target = '_blank';
-            link.rel = 'noopener noreferrer'; // Security best practice
-            link.textContent = sanitizeText(text);
+            link.textContent = text;
             textElement.appendChild(link);
         } else {
-            textElement.textContent = sanitizeText(text);
+            textElement.textContent = text;
         }
         
         this.text = text;
@@ -729,7 +632,7 @@ class ActionDialog extends Dialog {
     }
 
     show(peerName) {
-        $('action-title').textContent = `Connect with ${sanitizeText(peerName)}`;
+        $('action-title').textContent = `Connect with ${peerName}`;
         super.show();
     }
 
@@ -775,8 +678,8 @@ class Notifications {
         if (!this.hasPermission) return;
         if (document.visibilityState === 'visible') return;
         
-        const notification = new Notification(sanitizeText(title), {
-            body: sanitizeText(body),
+        const notification = new Notification(title, {
+            body: body,
             icon: 'favicon.png',
             data: data
         });
@@ -814,7 +717,7 @@ class Notifications {
     fileNotification(file) {
         if (document.visibilityState === 'visible') return;
         
-        this.notify('File Received', sanitizeText(file.name), {
+        this.notify('File Received', file.name, {
             action: () => {
                 drplUI.dialogs.receive.show();
             }
