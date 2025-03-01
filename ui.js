@@ -253,6 +253,7 @@ class ReceiveDialog extends Dialog {
         this.files = [];
         this.currentIndex = 0;
         this.objectUrls = {}; // Store URLs to prevent memory leaks
+        this.isTransitioning = false; // Add a flag to prevent rapid clicking
         this._setupCarousel();
         this._setupDownloadButtons();
         this._setupKeyboardNavigation();
@@ -264,9 +265,25 @@ class ReceiveDialog extends Dialog {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
+        // Add mousedown event to prevent default behavior completely
+        prevButton.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        
+        nextButton.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        
+        // Add click handlers with improved event handling
         prevButton.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Prevent interaction during transitions
+            if (this.isTransitioning) return;
+            
             this.showPreviousFile();
             return false;
         });
@@ -274,6 +291,10 @@ class ReceiveDialog extends Dialog {
         nextButton.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Prevent interaction during transitions
+            if (this.isTransitioning) return;
+            
             this.showNextFile();
             return false;
         });
@@ -284,14 +305,20 @@ class ReceiveDialog extends Dialog {
 
     _setupDownloadButtons() {
         // Current file download
-        $('download-current').addEventListener('click', () => {
+        $('download-current').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
             if (this.files.length > 0) {
                 this.downloadFile(this.files[this.currentIndex]);
             }
         });
         
         // Download all as zip
-        $('download-all').addEventListener('click', () => {
+        $('download-all').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
             this.downloadAllFiles();
         });
     }
@@ -299,22 +326,26 @@ class ReceiveDialog extends Dialog {
     _setupKeyboardNavigation() {
         // Add keyboard navigation support
         this._keyHandler = (e) => {
-            // Only process if dialog is active
-            if (!this.element.classList.contains('active')) return;
+            // Only process if dialog is active and not transitioning
+            if (!this.element.classList.contains('active') || this.isTransitioning) return;
             
             if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
                 this.showPreviousFile();
                 e.preventDefault();
+                e.stopPropagation();
             } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 this.showNextFile();
                 e.preventDefault();
+                e.stopPropagation();
             } else if (e.key === 'Escape') {
                 this.hide();
                 e.preventDefault();
+                e.stopPropagation();
             }
         };
         
-        window.addEventListener('keydown', this._keyHandler);
+        // Use a separate event listener for this dialog's keyboard navigation
+        document.addEventListener('keydown', this._keyHandler, true); // Use capture phase
     }
     
     _setupTouchNavigation() {
@@ -322,12 +353,13 @@ class ReceiveDialog extends Dialog {
         let startX, startY;
         
         this.carouselContainer.addEventListener('touchstart', (e) => {
+            if (this.isTransitioning) return;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
         }, { passive: true });
         
         this.carouselContainer.addEventListener('touchend', (e) => {
-            if (!startX || !startY) return;
+            if (this.isTransitioning || !startX || !startY) return;
             
             const endX = e.changedTouches[0].clientX;
             const endY = e.changedTouches[0].clientY;
@@ -383,6 +415,9 @@ class ReceiveDialog extends Dialog {
     // Show the file at the current index
     displayCurrentFile() {
         if (this.files.length === 0) return;
+        
+        // Set transition flag
+        this.isTransitioning = true;
         
         const file = this.files[this.currentIndex];
         let url = this.objectUrls[file.name];
@@ -457,12 +492,16 @@ class ReceiveDialog extends Dialog {
             // Remove fade-in class after animation completes
             setTimeout(() => {
                 this.carouselContainer.classList.remove('fade-in');
+                // Release transition lock
+                this.isTransitioning = false;
             }, 300);
         }, 150); // Slight delay to allow fade-out animation
     }
     
     // Show the next file in the carousel
     showNextFile() {
+        if (this.isTransitioning) return false;
+        
         if (this.currentIndex < this.files.length - 1) {
             this.currentIndex++;
             this.displayCurrentFile();
@@ -473,6 +512,8 @@ class ReceiveDialog extends Dialog {
     
     // Show the previous file in the carousel
     showPreviousFile() {
+        if (this.isTransitioning) return false;
+        
         if (this.currentIndex > 0) {
             this.currentIndex--;
             this.displayCurrentFile();
@@ -618,7 +659,19 @@ class ReceiveDialog extends Dialog {
     
     // Reset the dialog when hiding
     hide() {
+        // Only allow hiding if not in transition
+        if (this.isTransitioning) return;
+        
         super.hide();
+    }
+    
+    // Override show to ensure we're not in transition
+    show() {
+        this.isTransitioning = false;
+        super.show();
+        
+        // Make sure buttons are properly updated when showing
+        this._updateNavButtons();
     }
     
     // Clear all files (called when needed)
@@ -631,23 +684,16 @@ class ReceiveDialog extends Dialog {
         this.files = [];
         this.objectUrls = {};
         this.currentIndex = 0;
+        this.isTransitioning = false;
         this._updateFileCounter();
         this._updateNavButtons();
         this.carouselContainer.innerHTML = '';
     }
     
-    // Show the dialog and display the first file
-    show() {
-        super.show();
-        
-        // Make sure buttons are properly updated when showing
-        this._updateNavButtons();
-    }
-    
     // Clean up resources when the component is destroyed
     destroy() {
         // Remove event listeners
-        window.removeEventListener('keydown', this._keyHandler);
+        document.removeEventListener('keydown', this._keyHandler, true);
         
         // Revoke object URLs
         Object.values(this.objectUrls).forEach(url => {
