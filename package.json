@@ -1,17 +1,18 @@
 {
   "name": "drpl.co",
   "version": "1.0.0",
-  "description": "drpl.co is a Snapdrop-like P2P file transfer app",
-  "main": "server.js",
+  "description": "Easy file sharing via WebRTC",
+  "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "GPL-3.0",
   "dependencies": {
-    "ua-parser-js": "^0.7.24",
-    "unique-names-generator": "^4.3.0",
-    "ws": "^7.4.6"
+    "ua-parser-js": "^1.0.35",
+    "unique-names-generator": "^4.7.1",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }
