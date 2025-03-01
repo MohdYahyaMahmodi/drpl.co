@@ -13,14 +13,6 @@ class Events {
   }
 }
 
-// Security helper to prevent XSS attacks
-const sanitizeText = (text) => {
-    if (typeof text !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
-
 // Server connection
 class ServerConnection {
   constructor() {
@@ -45,34 +37,17 @@ class ServerConnection {
 
   _onMessage(msg) {
       try {
-          // Allow both string and binary messages
-          if (typeof msg === 'string') {
-              msg = JSON.parse(msg);
-          } else {
-              // If it's binary data just log and return
-              console.log('Received binary data');
-              return;
-          }
-          
+          msg = JSON.parse(msg);
           console.log('Server message:', msg);
-          
-          // Less strict validation - only check for type existence
-          if (!msg || !msg.type) {
-              console.error('Invalid message format - missing type');
-              return;
-          }
           
           switch (msg.type) {
               case 'peers':
-                  // Don't validate msg.peers structure - just forward it
-                  Events.fire('peers', msg.peers || []);
+                  Events.fire('peers', msg.peers);
                   break;
               case 'peer-joined':
-                  // Forward peer joined event with less validation
-                  Events.fire('peer-joined', msg.peer || {});
+                  Events.fire('peer-joined', msg.peer);
                   break;
               case 'peer-left':
-                  // Forward peer left event even if peerId isn't a string
                   Events.fire('peer-left', msg.peerId);
                   break;
               case 'signal':
@@ -82,8 +57,7 @@ class ServerConnection {
                   this.send({ type: 'pong' });
                   break;
               case 'display-name':
-                  // Forward display-name event with less validation
-                  Events.fire('display-name', msg.message || {});
+                  Events.fire('display-name', msg.message);
                   break;
               default:
                   console.error('Unknown message type:', msg.type);
@@ -95,18 +69,7 @@ class ServerConnection {
 
   send(message) {
       if (!this._isConnected()) return;
-      
-      // Ensure message is object-like but allow null properties
-      if (typeof message !== 'object') {
-          console.error('Invalid message (not an object):', message);
-          return;
-      }
-      
-      try {
-          this._socket.send(JSON.stringify(message));
-      } catch (e) {
-          console.error('Error sending message:', e);
-      }
+      this._socket.send(JSON.stringify(message));
   }
 
   _endpoint() {
@@ -155,11 +118,6 @@ class Peer {
   }
 
   sendJSON(message) {
-      // Less strict validation - just ensure it's object-like
-      if (typeof message !== 'object') {
-          console.error('Invalid message (not an object):', message);
-          return;
-      }
       this._send(JSON.stringify(message));
   }
 
@@ -218,13 +176,6 @@ class Peer {
       
       try {
           message = JSON.parse(message);
-          
-          // Less strict validation - only check for type
-          if (!message || !message.type) {
-              console.error('Invalid message format - missing type');
-              return;
-          }
-          
           console.log('Peer message:', message);
           
           switch (message.type) {
@@ -238,8 +189,7 @@ class Peer {
                   this._sendNextPartition();
                   break;
               case 'progress':
-                  // More lenient progress validation
-                  this._onDownloadProgress(Number(message.progress) || 0);
+                  this._onDownloadProgress(message.progress);
                   break;
               case 'transfer-complete':
                   this._onTransferCompleted();
@@ -255,43 +205,24 @@ class Peer {
 
   _onFileHeader(header) {
       this._lastProgress = 0;
-      
-      // Less strict validation for file headers
-      // Default values for missing properties
-      const validatedHeader = {
-          name: header.name || 'unnamed_file',
-          mime: header.mime || 'application/octet-stream',
-          size: header.size || 0
-      };
-      
-      if (validatedHeader.size <= 0) {
-          console.error('Invalid file size:', validatedHeader.size);
-          return;
-      }
-      
-      // Allow files up to 5GB but warn for large files
-      if (validatedHeader.size > 5368709120) {
-          console.warn('Large file size (>5GB):', validatedHeader.size);
-      }
-      
-      this._digester = new FileDigester(validatedHeader, file => this._onFileReceived(file));
+      this._digester = new FileDigester({
+          name: header.name,
+          mime: header.mime,
+          size: header.size
+      }, file => this._onFileReceived(file));
   }
 
   _onChunkReceived(chunk) {
-      if (!chunk || !chunk.byteLength) return;
+      if (!chunk.byteLength) return;
       
-      try {
-          this._digester.unchunk(chunk);
-          const progress = this._digester.progress;
-          this._onDownloadProgress(progress);
+      this._digester.unchunk(chunk);
+      const progress = this._digester.progress;
+      this._onDownloadProgress(progress);
 
-          // Notify sender about our progress occasionally
-          if (progress - this._lastProgress < 0.01) return;
-          this._lastProgress = progress;
-          this._sendProgress(progress);
-      } catch (e) {
-          console.error('Error handling chunk:', e);
-      }
+      // Notify sender about our progress occasionally
+      if (progress - this._lastProgress < 0.01) return;
+      this._lastProgress = progress;
+      this._sendProgress(progress);
   }
 
   _onDownloadProgress(progress) {
@@ -311,30 +242,13 @@ class Peer {
   }
 
   sendText(text) {
-      try {
-          const unescaped = btoa(unescape(encodeURIComponent(text)));
-          this.sendJSON({ type: 'text', text: unescaped });
-      } catch (e) {
-          console.error('Error encoding text:', e);
-          Events.fire('notify-user', 'Error sending message.');
-      }
+      const unescaped = btoa(unescape(encodeURIComponent(text)));
+      this.sendJSON({ type: 'text', text: unescaped });
   }
 
   _onTextReceived(message) {
-      try {
-          if (!message.text) {
-              console.error('Text message missing text property');
-              return;
-          }
-          
-          const decoded = atob(message.text);
-          const escaped = decodeURIComponent(escape(decoded));
-          // We don't sanitize here because the UI.js will handle sanitization when displaying
-          Events.fire('text-received', { text: escaped, sender: this._peerId });
-      } catch (e) {
-          console.error('Error processing text message:', e);
-          // Prevent processing malformed messages
-      }
+      const escaped = decodeURIComponent(escape(atob(message.text)));
+      Events.fire('text-received', { text: escaped, sender: this._peerId });
   }
 }
 
@@ -505,43 +419,14 @@ class PeersManager {
   }
 
   _onMessage(message) {
-      // Less strict validation for signal messages
-      if (!message) {
-          console.error('Empty message received');
-          return;
+      if (!this.peers[message.sender]) {
+          this.peers[message.sender] = new RTCPeer(this._server);
       }
-      
-      // Ensure there's a sender ID
-      const senderId = message.sender || '';
-      if (!senderId) {
-          console.error('Message missing sender ID');
-          return;
-      }
-      
-      if (!this.peers[senderId]) {
-          this.peers[senderId] = new RTCPeer(this._server);
-      }
-      
-      this.peers[senderId].onServerMessage(message);
+      this.peers[message.sender].onServerMessage(message);
   }
 
   _onPeers(peers) {
-      // Less strict - handle if peers is not an array
-      if (!peers) {
-          console.error('Empty peers data');
-          return;
-      }
-      
-      // Handle case where peers might not be an array
-      const peersArray = Array.isArray(peers) ? peers : [peers];
-      
-      peersArray.forEach(peer => {
-          // Skip peers without ID
-          if (!peer || !peer.id) {
-              console.warn('Skipping peer without ID', peer);
-              return;
-          }
-          
+      peers.forEach(peer => {
           if (this.peers[peer.id]) {
               this.peers[peer.id].refresh();
               return;
@@ -556,72 +441,18 @@ class PeersManager {
   }
 
   _onFilesSelected(message) {
-      // Less strict validation for file selection
-      if (!message) {
-          console.error('Empty files selected message');
-          return;
-      }
-      
-      const recipient = message.to;
-      if (!recipient) {
-          console.error('Files selected message missing recipient ID');
-          return;
-      }
-      
-      const files = message.files;
-      if (!files || !files.length) {
-          console.error('No files in files selected message');
-          return;
-      }
-      
-      if (!this.peers[recipient]) {
-          console.error('Peer not found:', recipient);
-          return;
-      }
-      
-      this.peers[recipient].sendFiles(files);
+      this.peers[message.to].sendFiles(message.files);
   }
 
   _onSendText(message) {
-      // Less strict validation for text messages
-      if (!message) {
-          console.error('Empty send text message');
-          return;
-      }
-      
-      const recipient = message.to;
-      if (!recipient) {
-          console.error('Text message missing recipient ID');
-          return;
-      }
-      
-      const text = message.text;
-      if (!text) {
-          console.error('Text message missing text content');
-          return;
-      }
-      
-      if (!this.peers[recipient]) {
-          console.error('Peer not found:', recipient);
-          return;
-      }
-      
-      this.peers[recipient].sendText(text);
+      this.peers[message.to].sendText(message.text);
   }
 
   _onPeerLeft(peerId) {
-      // Less strict - handle different peerId types
-      if (!peerId) {
-          console.error('Empty peer left message');
-          return;
-      }
-      
       const peer = this.peers[peerId];
       delete this.peers[peerId];
-      
-      if (peer && peer._conn) {
-          peer._conn.close();
-      }
+      if (!peer || !peer._conn) return;
+      peer._conn.close();
   }
 }
 
