@@ -533,6 +533,7 @@ footer {
   border-radius: var(--radius-small);
   box-shadow: var(--shadow-subtle);
   color: var(--text-color);
+  margin-bottom: 20px;
 }
 
 #display-name span {
