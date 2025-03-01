@@ -63,9 +63,22 @@ class DrplUI {
         }
     }
 
-    onDisplayName(data) {
-        $('display-name').textContent = `You are known as: ${data.displayName}`;
-    }
+// Update just the onDisplayName method in the DrplUI class
+onDisplayName(data) {
+  const displayNameElement = $('display-name');
+  
+  // Clear existing content
+  displayNameElement.innerHTML = '';
+  
+  // Create text node
+  const textNode = document.createTextNode('You are known as: ');
+  displayNameElement.appendChild(textNode);
+  
+  // Create span for the display name
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = data.displayName;
+  displayNameElement.appendChild(nameSpan);
+}
 
     onFileProgress(progress) {
         const peerId = progress.sender;
