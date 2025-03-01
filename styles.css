@@ -45,6 +45,20 @@
   --action-button-text: white;
   --action-button-shadow: 0 4px 12px rgba(94, 148, 255, 0.25);
   --action-button-hover-shadow: 0 6px 16px rgba(94, 148, 255, 0.35);
+  
+  /* Modal Button Variables */
+  --send-button-bg: #5e94ff;
+  --send-button-hover-bg: #4a7ad6;
+  --send-button-text: white;
+  --send-button-shadow: 0 4px 12px rgba(94, 148, 255, 0.15);
+  --send-button-hover-shadow: 0 6px 16px rgba(94, 148, 255, 0.25);
+  
+  --cancel-button-bg: #f0f0f0;
+  --cancel-button-hover-bg: #e0e0e0;
+  --cancel-button-text: #333;
+  --cancel-button-hover-text: #111;
+  --cancel-button-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  --cancel-button-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 [data-theme="dark"] {
@@ -86,6 +100,20 @@
   --action-button-text: white;
   --action-button-shadow: 0 4px 12px rgba(74, 122, 214, 0.25);
   --action-button-hover-shadow: 0 6px 16px rgba(74, 122, 214, 0.35);
+  
+  /* Modal Button Variables for Dark Mode */
+  --send-button-bg: #4a7ad6;
+  --send-button-hover-bg: #3a67bd;
+  --send-button-text: white;
+  --send-button-shadow: 0 4px 12px rgba(74, 122, 214, 0.15);
+  --send-button-hover-shadow: 0 6px 16px rgba(74, 122, 214, 0.25);
+  
+  --cancel-button-bg: #333333;
+  --cancel-button-hover-bg: #444444;
+  --cancel-button-text: #f0f0f0;
+  --cancel-button-hover-text: #ffffff;
+  --cancel-button-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --cancel-button-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -226,6 +254,38 @@ footer {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* CSS selector to target primary action buttons in dialogs */
+.dialog-buttons .button:not(.secondary) {
+  background-color: var(--send-button-bg) !important;
+  color: var(--send-button-text) !important;
+  box-shadow: var(--send-button-shadow);
+}
+
+.dialog-buttons .button:not(.secondary):hover {
+  background-color: var(--send-button-hover-bg) !important;
+  box-shadow: var(--send-button-hover-shadow);
+  transform: translateY(-2px);
+}
+
+/* CSS selector to target secondary action buttons in dialogs */
+.dialog-buttons .button.secondary {
+  background-color: var(--cancel-button-bg) !important;
+  color: var(--cancel-button-text) !important;
+  box-shadow: var(--cancel-button-shadow);
+}
+
+.dialog-buttons .button.secondary:hover {
+  background-color: var(--cancel-button-hover-bg) !important;
+  color: var(--cancel-button-hover-text) !important;
+  box-shadow: var(--cancel-button-hover-shadow);
+  transform: translateY(-2px);
+}
+
+/* Make sure icons within dialog buttons have proper color */
+.dialog-buttons .button i {
+  color: inherit;
 }
 
 .action-button {
@@ -375,6 +435,13 @@ footer {
   font-weight: 400;
   color: var(--text-color);
   line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+#no-peers p {
+  font-size: 16px;
+  color: var(--secondary-text);
+  line-height: 1.4;
 }
 
 #peers:empty + #no-peers {
