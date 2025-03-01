@@ -1,7 +1,9 @@
+<img src="https://ghtb-counter.vercel.app/api/counter?username=Drpl.co&label=Views&color=000000&labelColor=000000&labelBgColor=ffffff&countColor=ffffff&style=flat" alt="Views" />
+
 # drpl.co
 
 <p align="center">
-  <img src="https://drpl.co/favicon.png" alt="drpl.co logo" width="120" height="120">
+  <img src="https://drpl.co/images/favicon.png" alt="drpl.co logo" width="120" height="120">
 </p>
 
 <p align="center">
@@ -23,9 +25,9 @@ Visit the live site: [https://drpl.co](https://drpl.co)
 
 <p align="center">
   <b>Desktop Interface</b><br>
-  <img src="https://user-images.githubusercontent.com/YOUR_ACCOUNT/drpl-desktop-demo.png" alt="drpl.co desktop interface" width="800"><br><br>
+  <img src="https://drpl.co/images/image.png" alt="drpl.co desktop interface" width="800"><br><br>
   <b>Mobile Interface</b><br>
-  <img src="https://user-images.githubusercontent.com/YOUR_ACCOUNT/drpl-mobile-demo.png" alt="drpl.co mobile interface" width="300">
+  <img src="https://drpl.co/images/mobile.png" alt="drpl.co mobile interface" width="300">
 </p>
 
 > Note: Replace the image URLs with actual screenshots of your application once you've uploaded them to your GitHub repository.
@@ -218,7 +220,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Author
 
-**Mohd Mahmodi**
+**Mohd Yahya Mahmodi**
 
 - Website: [mohdmahmodi.com](https://mohdmahmodi.com)
 - Twitter: [@mohdmahmodi](https://x.com/mohdmahmodi)
