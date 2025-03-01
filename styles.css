@@ -506,8 +506,9 @@ footer {
 }
 
 .file-info {
-  margin-bottom: 16px;
-  color: var(--text-color);
+  text-align: center;
+  max-width: 90%;
+  margin: 0 auto 16px auto;
 }
 
 /* File Carousel */
@@ -523,8 +524,8 @@ footer {
 }
 
 .carousel-nav-button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -533,43 +534,53 @@ footer {
   background-color: var(--carousel-nav-bg);
   border: none;
   color: var(--text-color);
-  transition: all 0.2s;
+  transition: background-color 0.2s, transform 0.2s, opacity 0.2s;
+  position: relative;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.carousel-nav-button {
-  transition: opacity 0.3s, background-color 0.2s, transform 0.2s !important;
-}
 
-
-.carousel-nav-button:hover:not(:disabled) {
+.carousel-nav-button:hover:not(.disabled) {
   background-color: var(--carousel-nav-hover-bg);
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
 
 .carousel-nav-button.disabled {
-  opacity: 0.4 !important;
-  pointer-events: none !important;
-  cursor: not-allowed !important;
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .carousel-counter {
-  font-size: 16px;
+  padding: 5px 10px;
+  background-color: var(--carousel-nav-bg);
+  border-radius: 12px;
   font-weight: 500;
-  color: var(--text-color);
+  min-width: 60px;
+  text-align: center;
 }
 
+/* Completely removes the native disabled attribute styling */
+.carousel-nav-button:disabled {
+  opacity: 0.4;
+  background-color: var(--carousel-nav-bg) !important;
+  color: var(--text-color) !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
 
-
+/* Improve carousel usability */
 .carousel-item-container {
+  min-height: 200px;
   position: relative;
-  min-height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: pan-y;
+  transition: transform 0.3s ease;
   user-select: none;
-  -webkit-user-select: none;
-  cursor: grab;
 }
 
 .carousel-nav-button:not(.disabled):hover {
@@ -589,13 +600,17 @@ footer {
   align-items: center;
 }
 
+
 .carousel-image {
   max-width: 100%;
   max-height: 250px;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: var(--shadow-subtle);
-  margin: 15px 0;
+}
+
+.peer.connected .peer-icon {
+  box-shadow: 0 0 0 3px var(--accent-color);
 }
 
 /* File Type Display */
@@ -727,11 +742,13 @@ footer {
 
 /* File Preview */
 .preview {
-  margin: 20px 0;
-  text-align: center;
-  background-color: var(--preview-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
+  background-color: var(--preview-bg);
   border-radius: var(--radius-small);
+  margin: 16px 0;
 }
 
 #img-preview {

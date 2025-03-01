@@ -23,6 +23,8 @@ class DrplUI {
         Events.on('notify-user', e => this.showToast(e.detail));
         Events.on('file-sent', () => this.playSentSound());
         Events.on('text-sent', () => this.playSentSound());
+        Events.on('file-transfer-complete', () => this.onFileTransferComplete());
+        Events.on('peer-connection-established', peerId => this.onPeerConnected(peerId));
     }
 
     initializeDialogs() {
@@ -63,6 +65,13 @@ class DrplUI {
         }
     }
 
+    onPeerConnected(peerId) {
+        const peerElement = $(peerId);
+        if (peerElement) {
+            peerElement.classList.add('connected');
+        }
+    }
+
     onDisplayName(data) {
         const displayNameElement = $('display-name');
         
@@ -88,7 +97,13 @@ class DrplUI {
     }
 
     onFileReceived(file) {
+        // Add the file to the receive dialog
         this.dialogs.receive.addFile(file);
+    }
+
+    onFileTransferComplete() {
+        // File transfer completed, update UI if needed
+        console.log("File transfer completed");
     }
 
     onTextReceived(message) {
@@ -198,12 +213,24 @@ class ReceiveDialog extends Dialog {
         this.currentIndex = 0;
         this._setupCarousel();
         this._setupDownloadButtons();
+        this._setupKeyboardNavigation();
+        this._setupTouchNavigation();
     }
 
     _setupCarousel() {
-        // Navigation buttons
-        $('carousel-prev').addEventListener('click', () => this.showPreviousFile());
-        $('carousel-next').addEventListener('click', () => this.showNextFile());
+        // Navigation buttons - using direct DOM event attachment
+        const prevButton = $('carousel-prev');
+        const nextButton = $('carousel-next');
+        
+        prevButton.onclick = () => {
+            this.showPreviousFile();
+            return false;
+        };
+        
+        nextButton.onclick = () => {
+            this.showNextFile();
+            return false;
+        };
         
         // Item container
         this.carouselContainer = this.element.querySelector('.carousel-item-container');
@@ -221,11 +248,59 @@ class ReceiveDialog extends Dialog {
         $('download-all').addEventListener('click', () => {
             this.downloadAllFiles();
         });
-        
-        // Close button
-        $('close-receive').addEventListener('click', () => {
-            this.hide();
+    }
+    
+    _setupKeyboardNavigation() {
+        // Add keyboard navigation support
+        window.addEventListener('keydown', (e) => {
+            // Only process if dialog is active
+            if (!this.element.classList.contains('active')) return;
+            
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                this.showPreviousFile();
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                this.showNextFile();
+                e.preventDefault();
+            } else if (e.key === 'Escape') {
+                this.hide();
+                e.preventDefault();
+            }
         });
+    }
+    
+    _setupTouchNavigation() {
+        // Add touch navigation support
+        let startX, startY;
+        
+        this.carouselContainer.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        this.carouselContainer.addEventListener('touchend', (e) => {
+            if (!startX || !startY) return;
+            
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const diffX = startX - endX;
+            const diffY = startY - endY;
+            
+            // Horizontal swipe detection with threshold
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                if (diffX > 0) {
+                    // Swipe left, go to next
+                    this.showNextFile();
+                } else {
+                    // Swipe right, go to previous
+                    this.showPreviousFile();
+                }
+            }
+            
+            startX = null;
+            startY = null;
+        }, { passive: true });
     }
 
     // Add a file to the carousel
@@ -233,14 +308,23 @@ class ReceiveDialog extends Dialog {
         // Add to files array
         this.files.push(file);
         
-        // If this is the first file, display it
+        // Update file counter
+        this._updateFileCounter();
+        
+        // If this is the first file, display it and show the dialog
         if (this.files.length === 1) {
-            this.show();
             this.currentIndex = 0;
+            this.displayCurrentFile();
+            this.show();
+        } else {
+            // Just refresh the navigation if already showing
+            this._updateNavButtons();
+            
+            // Notify user about multiple files
+            if (this.files.length === 2) {
+                Events.fire('notify-user', 'Multiple files received. Use arrows to navigate.');
+            }
         }
-
-        // Always update the UI when adding files
-        this.displayCurrentFile();
     }
     
     // Show the file at the current index
@@ -300,7 +384,7 @@ class ReceiveDialog extends Dialog {
         // Add to container
         this.carouselContainer.appendChild(fileItem);
         
-        // Update file counter and navigation buttons
+        // Update counter and navigation buttons
         this._updateFileCounter();
         this._updateNavButtons();
     }
@@ -310,7 +394,9 @@ class ReceiveDialog extends Dialog {
         if (this.currentIndex < this.files.length - 1) {
             this.currentIndex++;
             this.displayCurrentFile();
+            return true;
         }
+        return false;
     }
     
     // Show the previous file in the carousel
@@ -318,35 +404,44 @@ class ReceiveDialog extends Dialog {
         if (this.currentIndex > 0) {
             this.currentIndex--;
             this.displayCurrentFile();
+            return true;
         }
+        return false;
     }
     
     // Update file counter display
     _updateFileCounter() {
-        $('current-file').textContent = this.currentIndex + 1;
-        $('total-files').textContent = this.files.length;
+        const currentElement = $('current-file');
+        const totalElement = $('total-files');
+        
+        if (currentElement && totalElement) {
+            currentElement.textContent = this.files.length > 0 ? this.currentIndex + 1 : 0;
+            totalElement.textContent = this.files.length;
+        }
     }
     
-    // Update navigation button states - FIXED to ensure buttons aren't disabled
+    // Update navigation button states
     _updateNavButtons() {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
-        // Enable all buttons first to avoid stuck disabled state
-        prevButton.disabled = false;
-        nextButton.disabled = false;
+        if (!prevButton || !nextButton) return;
+        
+        // Remove disabled state first
         prevButton.classList.remove('disabled');
         nextButton.classList.remove('disabled');
+        prevButton.removeAttribute('disabled');
+        nextButton.removeAttribute('disabled');
         
-        // Only disable if we're at the ends of the carousel
-        if (this.currentIndex === 0) {
-            prevButton.disabled = true;
+        // Only apply disabled state if actually at the end
+        if (this.currentIndex <= 0) {
             prevButton.classList.add('disabled');
+            prevButton.setAttribute('disabled', 'disabled');
         }
         
         if (this.currentIndex >= this.files.length - 1) {
-            nextButton.disabled = true;
             nextButton.classList.add('disabled');
+            nextButton.setAttribute('disabled', 'disabled');
         }
     }
     
@@ -448,17 +543,23 @@ class ReceiveDialog extends Dialog {
     // Reset the dialog when hiding
     hide() {
         super.hide();
-        
-        // Don't reset the files, just close the dialog
-        // This allows reopening the dialog to see the files again
     }
     
-    // Clear all files (called when a new session starts)
+    // Clear all files (called when needed)
     clearFiles() {
         this.files = [];
         this.currentIndex = 0;
         this._updateFileCounter();
+        this._updateNavButtons();
         this.carouselContainer.innerHTML = '';
+    }
+    
+    // Show the dialog and display the first file
+    show() {
+        super.show();
+        
+        // Make sure buttons are properly updated when showing
+        this._updateNavButtons();
     }
 }
 
@@ -483,6 +584,15 @@ class SendTextDialog extends Dialog {
             
             $('text-input').textContent = '';
             this.hide();
+        });
+        
+        // Add enter key support
+        const textInput = $('text-input');
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                $('send-text-button').click();
+            }
         });
     }
 
@@ -653,8 +763,16 @@ let drplUI;
 document.addEventListener('DOMContentLoaded', () => {
     drplUI = new DrplUI();
     
-    // Use the NotificationManager instead of directly instantiating a Notifications class
+    // Use the NotificationManager if available
     if (window.NotificationManager) {
         window.notificationHandler = window.NotificationManager.init();
     }
+    
+    // Initialize background animation
+    if (window.BackgroundAnimation) {
+        window.backgroundAnimation = new BackgroundAnimation();
+    }
+    
+    // Expose UI to window for debugging
+    window.drplUI = drplUI;
 });

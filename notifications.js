@@ -13,6 +13,8 @@ window.NotificationManager = (function() {
       // Setup notification event listeners
       Events.on('text-received', e => this.textNotification(e.detail));
       Events.on('file-received', e => this.fileNotification(e.detail));
+      Events.on('peer-joined', e => this.peerJoinedNotification(e.detail));
+      Events.on('peer-left', e => this.peerLeftNotification(e.detail));
     }
     
     checkPermission() {
@@ -70,8 +72,8 @@ window.NotificationManager = (function() {
       } else {
         this.notify('New Message', text.substring(0, 50) + (text.length > 50 ? '...' : ''), {
           action: () => {
-            if (drplUI && drplUI.dialogs.receiveText) {
-              drplUI.dialogs.receiveText.showText(text, data.sender);
+            if (window.drplUI && window.drplUI.dialogs.receiveText) {
+              window.drplUI.dialogs.receiveText.showText(text, data.sender);
             }
           }
         });
@@ -83,11 +85,23 @@ window.NotificationManager = (function() {
       
       this.notify('File Received', file.name, {
         action: () => {
-          if (drplUI && drplUI.dialogs.receive) {
-            drplUI.dialogs.receive.show();
+          if (window.drplUI && window.drplUI.dialogs.receive) {
+            window.drplUI.dialogs.receive.show();
           }
         }
       });
+    }
+    
+    peerJoinedNotification(peer) {
+      if (document.visibilityState === 'visible') return;
+      
+      this.notify('New Device Available', `${peer.name.displayName} (${peer.name.deviceName}) joined the network`, {
+        action: () => window.focus()
+      });
+    }
+    
+    peerLeftNotification(peerId) {
+      // We don't need to notify on peer departure
     }
   }
   

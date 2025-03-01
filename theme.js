@@ -1,41 +1,43 @@
-// Theme toggling functionality
-class ThemeManager {
-  constructor() {
-    this.themeToggle = document.getElementById('theme-toggle');
-    this.themeIcon = this.themeToggle.querySelector('i');
-    this.currentTheme = localStorage.getItem('theme') || 'dark';
+// Theme handling
+document.addEventListener('DOMContentLoaded', () => {
+  const themeToggle = document.getElementById('theme-toggle');
+  if (!themeToggle) return;
+  
+  // Initial state
+  const darkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+  updateThemeIcon(darkMode);
+  
+  // Handle clicks
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     
-    this.init();
-  }
-  
-  init() {
-    // Apply saved theme on page load
-    this.applyTheme(this.currentTheme);
+    // Update DOM
+    document.documentElement.setAttribute('data-theme', newTheme);
     
-    // Setup event listener for toggle button
-    this.themeToggle.addEventListener('click', () => this.toggleTheme());
-  }
+    // Save preference
+    localStorage.setItem('theme', newTheme);
+    
+    // Update icon
+    updateThemeIcon(newTheme === 'dark');
+    
+    // Notify other components
+    dispatchThemeChangedEvent();
+  });
   
-  toggleTheme() {
-    this.currentTheme = this.currentTheme === 'light' ? 'dark' : 'light';
-    this.applyTheme(this.currentTheme);
-    localStorage.setItem('theme', this.currentTheme);
-  }
-  
-  applyTheme(theme) {
-    if (theme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
-      this.themeIcon.classList.remove('fa-moon');
-      this.themeIcon.classList.add('fa-sun');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-      this.themeIcon.classList.remove('fa-sun');
-      this.themeIcon.classList.add('fa-moon');
+  function updateThemeIcon(isDark) {
+    const icon = themeToggle.querySelector('i');
+    if (icon) {
+      icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
     }
   }
-}
-
-// Initialize the theme manager when DOM content is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  new ThemeManager();
+  
+  function dispatchThemeChangedEvent() {
+    const event = new CustomEvent('theme-changed', {
+      detail: {
+        theme: document.documentElement.getAttribute('data-theme')
+      }
+    });
+    document.dispatchEvent(event);
+  }
 });
