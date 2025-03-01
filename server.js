@@ -1,15 +1,27 @@
+const http = require('http');
+const express = require('express');
 const WebSocket = require('ws');
+const path = require('path');
 const parser = require('ua-parser-js');
 const { uniqueNamesGenerator, colors, animals } = require('unique-names-generator');
 
+// Create the Express app
+const app = express();
+
+// Serve static files from the current directory
+app.use(express.static('.'));
+
+// Create HTTP server
+const server = http.createServer(app);
+
 class DrplServer {
-    constructor(port) {
-        this._wss = new WebSocket.Server({ port: port });
+    constructor(server) {
+        this._wss = new WebSocket.Server({ server: server });
         this._wss.on('connection', (socket, request) => this._onConnection(new Peer(socket, request)));
         this._wss.on('headers', (headers, response) => this._onHeaders(headers, response));
 
         this._rooms = {};
-        console.log('drpl.co is running on port', port);
+        console.log('drpl.co WebSocket server is running');
     }
 
     _onConnection(peer) {
@@ -175,7 +187,7 @@ class Peer {
         if (request.headers['x-forwarded-for']) {
             this.ip = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
         } else {
-            this.ip = request.connection.remoteAddress;
+            this.ip = request.socket.remoteAddress;
         }
         // IPv4 and IPv6 use different values to refer to localhost
         if (this.ip == '::1' || this.ip == '::ffff:127.0.0.1') {
@@ -275,4 +287,8 @@ String.prototype.hashCode = function() {
 };
 
 // Start the server
-const server = new DrplServer(process.env.PORT || 3002);
+const PORT = process.env.PORT || 3002;
+server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    new DrplServer(server);
+});

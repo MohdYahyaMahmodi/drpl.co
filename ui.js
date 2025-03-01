@@ -9,6 +9,7 @@ class DrplUI {
         this.currentPeer = null;
         this.initializeEvents();
         this.initializeDialogs();
+        this.initializeSounds();
     }
 
     initializeEvents() {
@@ -20,6 +21,8 @@ class DrplUI {
         Events.on('file-received', e => this.onFileReceived(e.detail));
         Events.on('text-received', e => this.onTextReceived(e.detail));
         Events.on('notify-user', e => this.showToast(e.detail));
+        Events.on('file-sent', () => this.playSentSound());
+        Events.on('text-sent', () => this.playSentSound());
     }
 
     initializeDialogs() {
@@ -30,6 +33,17 @@ class DrplUI {
             receiveText: new ReceiveTextDialog(),
             action: new ActionDialog()
         };
+    }
+
+    initializeSounds() {
+        this.sentSound = $('sent-sound');
+    }
+
+    playSentSound() {
+        if (this.sentSound) {
+            this.sentSound.currentTime = 0;
+            this.sentSound.play().catch(err => console.log('Sound play failed:', err));
+        }
     }
 
     onPeerJoined(peer) {
@@ -259,6 +273,9 @@ class SendTextDialog extends Dialog {
                 to: this.peerId
             });
             
+            // Fire event for sound
+            Events.fire('text-sent');
+            
             $('text-input').textContent = '';
             this.hide();
         });
@@ -358,6 +375,9 @@ class ActionDialog extends Dialog {
                 files: files,
                 to: drplUI.currentPeer
             });
+            
+            // Fire event for sound
+            Events.fire('file-sent');
             
             e.target.value = null; // Reset input
         });

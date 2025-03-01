@@ -76,7 +76,8 @@ class ServerConnection {
       // Use secure WebSockets if page is loaded over HTTPS
       const protocol = location.protocol.startsWith('https') ? 'wss' : 'ws';
       const webrtc = window.RTCPeerConnection ? '/webrtc' : '/fallback';
-      return `${protocol}://${location.host}/server${webrtc}`;
+      const host = location.host || window.location.host;
+      return `${protocol}://${host}/server${webrtc}`;
   }
 
   _disconnect() {
