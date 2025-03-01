@@ -1493,7 +1493,6 @@ a {
   
   /* Add swipe hint text */
   .carousel-item-container::before {
-      content: 'Swipe to navigate';
       position: absolute;
       bottom: -30px;
       left: 0;
