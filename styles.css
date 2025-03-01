@@ -392,16 +392,18 @@ footer {
   color: var(--secondary-text);
 }
 
+/* Improved progress circle for both light and dark mode */
 .progress-circle {
   position: absolute;
   top: 10px;
   width: 70px;
   height: 70px;
   border-radius: 50%;
-  background: conic-gradient(var(--primary-color) var(--progress, 0%), transparent 0);
+  background: conic-gradient(var(--peer-icon-color) var(--progress, 0%), transparent 0%);
   transform: rotate(-90deg);
   opacity: 0;
   transition: opacity 0.3s;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .progress-circle::before {
@@ -413,6 +415,23 @@ footer {
   bottom: 5px;
   border-radius: 50%;
   background: var(--progress-circle-bg);
+}
+
+/* Add a mini progress indicator inside the circle */
+.progress-circle::after {
+  content: attr(data-progress) '%';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-color);
+  transform: rotate(90deg); /* Counter the parent's rotation */
 }
 
 .peer[transfer] .progress-circle {
@@ -1057,6 +1076,81 @@ footer {
 /* Improve security for links */
 a[target="_blank"] {
   rel: "noopener noreferrer";
+}
+
+/* Transfer Progress Dialog */
+.transfer-progress-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 0;
+    text-align: center;
+}
+
+.spinner-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 20px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 6px solid var(--border-color);
+    border-top-color: var(--peer-icon-color);
+    animation: spinner-rotation 1.5s linear infinite;
+}
+
+.progress-percentage {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.transfer-details {
+    margin-top: 16px;
+    width: 100%;
+}
+
+.file-counter {
+    font-size: 16px;
+    color: var(--secondary-text);
+    margin-bottom: 8px;
+}
+
+.transfer-filename {
+    font-size: 14px;
+    color: var(--text-color);
+    font-weight: 500;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.transfer-speed {
+    font-size: 14px;
+    color: var(--secondary-text);
+    text-align: center;
+    margin-top: 16px;
+}
+
+@keyframes spinner-rotation {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Responsive adjustments */

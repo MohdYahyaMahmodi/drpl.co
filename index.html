@@ -179,6 +179,26 @@
         </div>
     </div>
 
+    <!-- File Transfer Progress Dialog -->
+    <div id="transfer-progress-dialog" class="dialog">
+        <div class="dialog-background center">
+            <div class="dialog-content">
+                <h3 id="transfer-title">Transferring Files</h3>
+                <div class="transfer-progress-container">
+                    <div class="spinner-container">
+                        <div class="spinner-ring"></div>
+                        <div class="progress-percentage">0%</div>
+                    </div>
+                    <div class="transfer-details">
+                        <div class="file-counter">File <span id="current-transfer-file">1</span> of <span id="total-transfer-files">1</span></div>
+                        <div class="transfer-filename" id="transfer-filename">filename.jpg</div>
+                    </div>
+                </div>
+                <div class="transfer-speed" id="transfer-speed">0 KB/s</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast-container center">
         <div id="toast" class="toast">File Transfer Completed</div>
@@ -302,10 +322,10 @@
     </script>
 
     <!-- Scripts - Make sure they're loaded in the correct order -->
-    <script src="network.js?v=1.0.15"></script>
+    <script src="network.js?v=1.0.16"></script>
     <script src="theme.js?v=1.0.12"></script>
     <script src="background-animation.js?v=1.0.12"></script>
     <script src="notifications.js?v=1.0.12"></script>
-    <script src="ui.js?v=1.0.12"></script>
+    <script src="ui.js?v=1.0.13"></script>
 </body>
 </html>

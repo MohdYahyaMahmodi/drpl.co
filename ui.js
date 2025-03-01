@@ -25,6 +25,10 @@ class DrplUI {
         Events.on('text-sent', () => this.playSentSound());
         Events.on('file-transfer-complete', () => this.onFileTransferComplete());
         Events.on('peer-connection-established', peerId => this.onPeerConnected(peerId));
+        
+        // Add these new event handlers
+        Events.on('file-send-start', e => this.handleFileSendStart(e.detail.files, e.detail.to));
+        Events.on('file-receive-start', e => this.handleFileReceiveStart(e.detail.header, e.detail.from));
     }
 
     initializeDialogs() {
@@ -33,7 +37,8 @@ class DrplUI {
             receive: new ReceiveDialog(),
             sendText: new SendTextDialog(),
             receiveText: new ReceiveTextDialog(),
-            action: new ActionDialog()
+            action: new ActionDialog(),
+            transferProgress: new TransferProgressDialog() // Add new progress dialog
         };
     }
 
@@ -93,12 +98,19 @@ class DrplUI {
         const peerElement = $(peerId);
         if (!peerElement) return;
         
+        // Update the peer element progress for visual feedback
         this.setPeerProgress(peerElement, progress.progress);
+        
+        // Also update the progress dialog
+        this.dialogs.transferProgress.updateProgress(peerId, progress.progress, progress.bytesTransferred);
     }
 
     onFileReceived(file) {
         // Add the file to the receive dialog
         this.dialogs.receive.addFile(file);
+        
+        // End the transfer in the progress dialog
+        this.dialogs.transferProgress.endTransfer(file.sender);
     }
 
     onFileTransferComplete() {
@@ -174,11 +186,35 @@ class DrplUI {
         const progressCircle = peerElement.querySelector('.progress-circle');
         progressCircle.style.setProperty('--progress', `${progress * 100}%`);
         
+        // Add percentage text
+        const percentage = Math.round(progress * 100);
+        progressCircle.setAttribute('data-progress', percentage);
+        
         if (progress >= 1) {
             setTimeout(() => {
                 peerElement.removeAttribute('transfer');
             }, 500);
         }
+    }
+
+    // Handle transfer start events
+    handleFileSendStart(files, peerId) {
+        // Start the transfer progress dialog
+        this.dialogs.transferProgress.startTransfer(
+            peerId, 
+            files.length > 1 ? `${files.length} files` : files[0].name,
+            files.length,
+            files.length > 0 ? files[0].size : 0
+        );
+    }
+
+    handleFileReceiveStart(fileHeader, peerId) {
+        // Start the transfer progress dialog for receiving
+        this.dialogs.transferProgress.startReceiving(
+            peerId,
+            fileHeader.name,
+            fileHeader.size
+        );
     }
 }
 
@@ -807,6 +843,145 @@ class ActionDialog extends Dialog {
 
     selectFiles() {
         $('file-input').click();
+    }
+}
+
+// Transfer Progress Dialog
+class TransferProgressDialog extends Dialog {
+    constructor() {
+        super('transfer-progress-dialog');
+        this.reset();
+        this.activeTransfers = {};
+        this.lastUpdateTime = Date.now();
+        this.lastBytes = 0;
+    }
+    
+    reset() {
+        this.totalFiles = 0;
+        this.currentFile = 0;
+        this.fileName = '';
+        this.progress = 0;
+    }
+    
+    startTransfer(peerId, fileName, fileCount = 1, fileSize = 0) {
+        this.activeTransfers[peerId] = {
+            totalFiles: fileCount,
+            currentFile: 1,
+            fileName: fileName,
+            progress: 0,
+            fileSize: fileSize,
+            bytesTransferred: 0,
+            startTime: Date.now(),
+            lastUpdateTime: Date.now(),
+            lastBytes: 0
+        };
+        
+        // Set dialog title based on transfer direction
+        $('transfer-title').textContent = 'Sending File' + (fileCount > 1 ? 's' : '');
+        
+        this.updateUI(peerId);
+        this.show();
+    }
+    
+    startReceiving(peerId, fileName, fileSize = 0) {
+        this.activeTransfers[peerId] = {
+            totalFiles: 1, // We might not know the total count yet
+            currentFile: 1,
+            fileName: fileName,
+            progress: 0,
+            fileSize: fileSize,
+            bytesTransferred: 0,
+            startTime: Date.now(),
+            lastUpdateTime: Date.now(),
+            lastBytes: 0,
+            isReceiving: true
+        };
+        
+        // Set dialog title for receiving
+        $('transfer-title').textContent = 'Receiving File';
+        
+        this.updateUI(peerId);
+        this.show();
+    }
+    
+    updateProgress(peerId, progress, bytesTransferred = 0) {
+        if (!this.activeTransfers[peerId]) return;
+        
+        const transfer = this.activeTransfers[peerId];
+        transfer.progress = progress;
+        
+        // Update bytes transferred if provided
+        if (bytesTransferred > 0) {
+            transfer.bytesTransferred = bytesTransferred;
+        }
+        
+        // Calculate transfer speed
+        const now = Date.now();
+        const timeDiff = (now - transfer.lastUpdateTime) / 1000; // Convert to seconds
+        
+        if (timeDiff > 0.5) { // Update every 500ms
+            const bytesDiff = transfer.bytesTransferred - transfer.lastBytes;
+            const speed = bytesDiff / timeDiff; // Bytes per second
+            
+            transfer.speed = speed;
+            transfer.lastUpdateTime = now;
+            transfer.lastBytes = transfer.bytesTransferred;
+        }
+        
+        this.updateUI(peerId);
+    }
+    
+    nextFile(peerId, fileName) {
+        if (!this.activeTransfers[peerId]) return;
+        
+        this.activeTransfers[peerId].currentFile++;
+        this.activeTransfers[peerId].progress = 0;
+        
+        if (fileName) {
+            this.activeTransfers[peerId].fileName = fileName;
+        }
+        
+        this.updateUI(peerId);
+    }
+    
+    updateUI(peerId) {
+        const transfer = this.activeTransfers[peerId];
+        if (!transfer) return;
+        
+        $('current-transfer-file').textContent = transfer.currentFile;
+        $('total-transfer-files').textContent = transfer.totalFiles;
+        $('transfer-filename').textContent = transfer.fileName || '';
+        
+        const percentage = Math.round(transfer.progress * 100);
+        document.querySelector('.progress-percentage').textContent = `${percentage}%`;
+        
+        // Update transfer speed if available
+        if (transfer.speed !== undefined) {
+            $('transfer-speed').textContent = this._formatSpeed(transfer.speed);
+        }
+    }
+    
+    _formatSpeed(bytesPerSecond) {
+        if (bytesPerSecond >= 1e6) {
+            return (Math.round(bytesPerSecond / 1e5) / 10) + ' MB/s';
+        } else if (bytesPerSecond >= 1e3) {
+            return Math.round(bytesPerSecond / 1e3) + ' KB/s';
+        } else {
+            return Math.round(bytesPerSecond) + ' B/s';
+        }
+    }
+    
+    endTransfer(peerId) {
+        delete this.activeTransfers[peerId];
+        
+        // If no more active transfers, hide the dialog
+        if (Object.keys(this.activeTransfers).length === 0) {
+            setTimeout(() => this.hide(), 1000); // Delay to show 100% for a moment
+        } else {
+            // Otherwise, update UI with the next active transfer
+            const nextPeerId = Object.keys(this.activeTransfers)[0];
+            this.updateUI(nextPeerId);
+        }
     }
 }
 
