@@ -217,9 +217,12 @@ class ReceiveDialog extends Dialog {
     }
 
     _setupCarousel() {
-        // Navigation buttons
-        $('carousel-prev').addEventListener('click', () => this.showPreviousFile());
-        $('carousel-next').addEventListener('click', () => this.showNextFile());
+        // Navigation buttons - using onclick instead of addEventListener for better compatibility
+        const prevButton = $('carousel-prev');
+        const nextButton = $('carousel-next');
+        
+        prevButton.onclick = () => this.showPreviousFile();
+        nextButton.onclick = () => this.showNextFile();
         
         // Item container
         this.carouselContainer = this.element.querySelector('.carousel-item-container');
@@ -276,13 +279,13 @@ class ReceiveDialog extends Dialog {
         // Add to files array
         this.files.push(file);
         
-        // Update title and counter
-        this._updateFileCounter();
-        
         // If this is the first file, display it
         if (this.files.length === 1) {
             this.show();
             this.displayCurrentFile();
+        } else {
+            // Just update counter if dialog is already visible
+            this._updateFileCounter();
         }
     }
     
@@ -291,6 +294,11 @@ class ReceiveDialog extends Dialog {
         if (this.files.length === 0) return;
         
         const file = this.files[this.currentIndex];
+        if (!file) {
+            console.error('No file found at index', this.currentIndex);
+            return;
+        }
+        
         const url = URL.createObjectURL(file.blob);
         
         // Clear the container
@@ -357,6 +365,7 @@ class ReceiveDialog extends Dialog {
         this.carouselContainer.appendChild(fileItem);
         
         // Update navigation buttons
+        this._updateFileCounter();
         this._updateNavButtons();
     }
     
@@ -378,8 +387,15 @@ class ReceiveDialog extends Dialog {
     
     // Update file counter display
     _updateFileCounter() {
-        $('current-file').textContent = this.currentIndex + 1;
-        $('total-files').textContent = this.files.length;
+        if (!this.files.length) return;
+        
+        const currentElem = $('current-file');
+        const totalElem = $('total-files');
+        
+        if (currentElem && totalElem) {
+            currentElem.textContent = this.currentIndex + 1;
+            totalElem.textContent = this.files.length;
+        }
     }
     
     // Update navigation button states
@@ -387,25 +403,33 @@ class ReceiveDialog extends Dialog {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
-        // Disable prev button if at first file
-        prevButton.disabled = this.currentIndex === 0;
-        prevButton.classList.toggle('disabled', this.currentIndex === 0);
+        if (!prevButton || !nextButton) return;
         
-        // Disable next button if at last file
-        nextButton.disabled = this.currentIndex === this.files.length - 1;
-        nextButton.classList.toggle('disabled', this.currentIndex === this.files.length - 1);
+        // Use a simpler approach - just set disabled attribute and let CSS handle the styling
+        if (this.currentIndex <= 0) {
+            prevButton.setAttribute('disabled', 'disabled');
+        } else {
+            prevButton.removeAttribute('disabled');
+        }
         
-        // Update counter
-        this._updateFileCounter();
+        if (this.currentIndex >= this.files.length - 1) {
+            nextButton.setAttribute('disabled', 'disabled');
+        } else {
+            nextButton.removeAttribute('disabled');
+        }
     }
     
     // Get file extension
     _getFileExtension(filename) {
-        return filename.split('.').pop().toLowerCase();
+        if (!filename || typeof filename !== 'string') return '';
+        const parts = filename.split('.');
+        return parts.length > 1 ? parts.pop().toLowerCase() : '';
     }
     
     // Get appropriate icon class based on file type
     _getFileIconClass(mimeType) {
+        if (!mimeType) return 'fas fa-file fa-4x';
+        
         if (mimeType.startsWith('image/')) {
             return 'fas fa-file-image fa-4x';
         } else if (mimeType.startsWith('video/')) {
@@ -433,6 +457,11 @@ class ReceiveDialog extends Dialog {
     
     // Download a single file
     downloadFile(file) {
+        if (!file || !file.blob) {
+            console.error('Invalid file object:', file);
+            return;
+        }
+        
         const url = URL.createObjectURL(file.blob);
         const a = document.createElement('a');
         a.href = url;
@@ -490,6 +519,8 @@ class ReceiveDialog extends Dialog {
     }
     
     _formatFileSize(bytes) {
+        if (!bytes || isNaN(bytes)) return '0 Bytes';
+        
         if (bytes >= 1e9) {
             return (Math.round(bytes / 1e8) / 10) + ' GB';
         } else if (bytes >= 1e6) {
@@ -514,7 +545,9 @@ class ReceiveDialog extends Dialog {
         this.files = [];
         this.currentIndex = 0;
         this._updateFileCounter();
-        this.carouselContainer.innerHTML = '';
+        if (this.carouselContainer) {
+            this.carouselContainer.innerHTML = '';
+        }
     }
 }
 

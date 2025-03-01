@@ -83,7 +83,7 @@ class Notifications {
   }
 }
 
-// Initialize notifications
 document.addEventListener('DOMContentLoaded', () => {
-  const notifications = new Notifications();
+  // The Notifications class is already instantiated in ui.js, so we don't need to do it here
+  console.log('Notifications module loaded');
 });
