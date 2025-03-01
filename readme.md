@@ -1,12 +1,34 @@
 # drpl.co
 
-![drpl.co logo](https://drpl.co/favicon.png)
+<p align="center">
+  <img src="https://drpl.co/favicon.png" alt="drpl.co logo" width="120" height="120">
+</p>
+
+<p align="center">
+  <a href="https://github.com/MohdYahyaMahmodi/drpl.co/stargazers"><img src="https://img.shields.io/github/stars/MohdYahyaMahmodi/drpl.co" alt="Stars"></a>
+  <a href="https://github.com/MohdYahyaMahmodi/drpl.co/network/members"><img src="https://img.shields.io/github/forks/MohdYahyaMahmodi/drpl.co" alt="Forks"></a>
+  <a href="https://github.com/MohdYahyaMahmodi/drpl.co/issues"><img src="https://img.shields.io/github/issues/MohdYahyaMahmodi/drpl.co" alt="Issues"></a>
+  <a href="https://github.com/MohdYahyaMahmodi/drpl.co/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MohdYahyaMahmodi/drpl.co" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-all_browsers-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
+</p>
 
 ## Open-Source Peer-to-Peer File Sharing for All Devices
 
 **drpl.co** is a free, open-source file sharing solution that works across all platforms without requiring apps, accounts, or device-specific limitations. Share files instantly between any devices on the same network.
 
 Visit the live site: [https://drpl.co](https://drpl.co)
+
+## Demo
+
+<p align="center">
+  <b>Desktop Interface</b><br>
+  <img src="https://user-images.githubusercontent.com/YOUR_ACCOUNT/drpl-desktop-demo.png" alt="drpl.co desktop interface" width="800"><br><br>
+  <b>Mobile Interface</b><br>
+  <img src="https://user-images.githubusercontent.com/YOUR_ACCOUNT/drpl-mobile-demo.png" alt="drpl.co mobile interface" width="300">
+</p>
+
+> Note: Replace the image URLs with actual screenshots of your application once you've uploaded them to your GitHub repository.
 
 ## Features
 
@@ -57,18 +79,18 @@ drpl.co is designed with privacy as a core principle:
 To run drpl.co locally:
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/MohdYahyaMahmodi/drpl.co.git
    cd drpl.co
    ```
 
 2. Install dependencies:
-   ```
+   ```bash
    npm install
    ```
 
 3. Start the server:
-   ```
+   ```bash
    node server.js
    ```
 
@@ -84,17 +106,37 @@ drpl.co can be easily self-hosted on your own server:
 2. Install dependencies with `npm install`
 3. Configure your web server (nginx, Apache, etc.) to proxy requests to the Node.js application
 4. Start the server with PM2 or a similar process manager:
-   ```
+   ```bash
    pm2 start server.js --name drpl
    ```
 
-### Self-Hosting with Docker
+### Optional: HTTPS Setup for Production
 
-We provide a Dockerfile for easy containerization:
+For a production environment, it's recommended to set up HTTPS:
 
-```
-docker build -t drpl .
-docker run -p 3002:3002 drpl
+1. Obtain SSL certificates (e.g., using Let's Encrypt)
+2. Configure your web server to use these certificates
+3. Set up a reverse proxy to your Node.js application
+
+Example nginx configuration:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
 ```
 
 ## Project Structure
@@ -107,6 +149,37 @@ docker run -p 3002:3002 drpl
 - `theme.js` - Theme switching functionality
 - `background-animation.js` - Canvas animation for the background
 - `notifications.js` - Browser notification handling
+
+## Technical Implementation Details
+
+### Signaling Server
+
+The signaling server (`server.js`) facilitates the discovery of peers on the local network. Key components:
+
+- WebSocket server for real-time communication
+- Room management based on IP addresses
+- Peer tracking and event propagation
+- Keep-alive mechanism to maintain connections
+
+### WebRTC Implementation
+
+The `network.js` file implements the WebRTC peer connections:
+
+- ICE candidate exchange
+- SDP offer/answer exchange
+- Data channel establishment
+- Chunked file transfer with progress tracking
+- Fallback to WebSocket when WebRTC is unavailable
+
+### UI Components
+
+The `ui.js` file manages the interface and user experience:
+
+- Device discovery and representation
+- Dialog management for file transfers
+- File carousel for viewing received files
+- Progress indicators during transfers
+- Theme switching and responsive design
 
 ## Browser Compatibility
 
