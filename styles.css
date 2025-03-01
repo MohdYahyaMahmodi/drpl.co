@@ -387,7 +387,6 @@ footer {
   opacity: 0;
   transform: scale(0.98);
   transition: opacity 0.4s, transform 0.4s;
-  overflow-y: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -407,28 +406,41 @@ footer {
   padding: 40px;
   margin: 30px 0;
   position: relative;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .about-header {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 16px;
+  right: 16px;
   z-index: 220;
 }
 
 .about-header .close {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   background-color: rgba(0, 0, 0, 0.05);
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .about-header .close:hover {
   background-color: rgba(0, 0, 0, 0.1);
+  transform: scale(1.05);
+}
+
+.about-header .close i {
+  font-size: 16px;
+  color: #555;
 }
 
 .about-logo-section {
   margin-bottom: 30px;
+  padding-right: 20px; /* Make space for the close button */
 }
 
 .about-logo {
@@ -547,13 +559,13 @@ footer {
 @media (max-width: 600px) {
   .about-container {
     padding: 30px 20px;
+    width: 94%;
+    max-height: 92vh;
   }
   
   .about-step {
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-    text-align: center;
+    flex-direction: row; /* Keep horizontal layout on mobile */
+    gap: 12px;
   }
   
   .about h1 {
@@ -562,6 +574,29 @@ footer {
   
   .about-tagline p {
     font-size: 16px;
+  }
+  
+  .step-icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* For very small screens, adjust spacing */
+@media (max-width: 380px) {
+  .about-container {
+    padding: 24px 16px;
+  }
+  
+  .about-step {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+  
+  .about-steps {
+    gap: 20px;
   }
 }
 
