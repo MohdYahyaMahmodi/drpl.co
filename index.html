@@ -16,6 +16,9 @@
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- JSZip Library for creating ZIP files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 
 <body>
@@ -48,20 +51,37 @@
         <div id="display-name"></div>
     </footer>
 
-    <!-- Receive Dialog -->
+    <!-- Receive Dialog - Enhanced with carousel -->
     <div id="receive-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
-                <h3>File Received</h3>
-                <div class="file-info">
-                    <div class="file-name" id="file-name">Filename</div>
-                    <div class="file-size" id="file-size"></div>
+                <h3>Files Received</h3>
+                
+                <div class="file-carousel">
+                    <div class="carousel-navigation">
+                        <button class="carousel-nav-button prev" id="carousel-prev">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="carousel-counter">
+                            <span id="current-file">1</span> / <span id="total-files">1</span>
+                        </div>
+                        <button class="carousel-nav-button next" id="carousel-next">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="carousel-item-container">
+                        <!-- Files will be displayed here -->
+                    </div>
                 </div>
-                <div class="preview" style="display: none;">
-                    <img id="img-preview" src="" alt="Preview">
-                </div>
-                <div class="dialog-buttons">
-                    <a class="button" id="download" title="Download File">Save</a>
+                
+                <div class="dialog-buttons carousel-actions">
+                    <a class="button" id="download-current" title="Download this file">
+                        <i class="fas fa-download"></i> Download File
+                    </a>
+                    <button class="button secondary" id="download-all">
+                        <i class="fas fa-file-archive"></i> Download All
+                    </button>
                     <button class="button secondary" id="close-receive">Close</button>
                 </div>
             </div>
@@ -82,13 +102,21 @@
         </div>
     </div>
 
-    <!-- Receive Text Dialog -->
+    <!-- Receive Text Dialog - Enhanced with reply option -->
     <div id="receive-text-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
                 <h3>Message Received</h3>
-                <div id="received-text" class="received-text"></div>
+                <div class="message-container">
+                    <div id="received-text" class="received-text"></div>
+                </div>
+                
+                <div class="reply-container">
+                    <div id="reply-input" class="textarea" contenteditable="true" placeholder="Type your reply..."></div>
+                </div>
+                
                 <div class="dialog-buttons">
+                    <button class="button" id="reply-button">Reply</button>
                     <button class="button" id="copy-text">Copy</button>
                     <button class="button secondary" id="close-text-receive">Close</button>
                 </div>

@@ -138,6 +138,18 @@ footer {
   background-color: #e5e5e5;
 }
 
+.button i {
+  margin-right: 8px;
+}
+
+.button:disabled,
+.button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .action-button {
   margin: 10px;
   padding: 16px 20px;
@@ -314,7 +326,7 @@ footer {
   background-color: white;
   border-radius: var(--radius-medium);
   padding: 24px;
-  max-width: 450px;
+  max-width: 480px;
   width: 94%;
   max-height: 85vh;
   overflow-y: auto;
@@ -344,6 +356,77 @@ footer {
   margin-bottom: 16px;
 }
 
+/* File Carousel */
+.file-carousel {
+  margin: 20px 0;
+}
+
+.carousel-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.carousel-nav-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: #f5f5f5;
+  border: none;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.carousel-nav-button:hover:not(:disabled) {
+  background-color: #e5e5e5;
+  transform: scale(1.05);
+}
+
+.carousel-nav-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.carousel-counter {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.carousel-item-container {
+  position: relative;
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.carousel-image {
+  max-width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: var(--shadow-subtle);
+  margin: 15px 0;
+}
+
+.file-icon {
+  margin: 20px 0;
+  color: #555;
+  text-align: center;
+}
+
 /* Input Area */
 .textarea {
   width: 100%;
@@ -371,19 +454,33 @@ footer {
   color: #999;
 }
 
-/* Received Text */
+/* Message and Reply Styling */
+.message-container {
+  margin-bottom: 16px;
+}
+
 .received-text {
   width: 100%;
-  min-height: 120px;
-  max-height: 250px;
+  min-height: 60px;
+  max-height: 200px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-small);
   padding: 16px;
-  margin: 16px 0;
+  margin: 10px 0;
   overflow: auto;
   word-break: break-word;
   line-height: 1.5;
   background-color: #f9f9f9;
+}
+
+.reply-container {
+  margin-top: 15px;
+}
+
+#reply-input {
+  min-height: 80px;
+  background-color: #fff;
+  border: 1px solid var(--border-color);
 }
 
 /* File Preview */
@@ -680,12 +777,22 @@ footer {
   gap: 12px;
 }
 
+/* Carousel Actions */
+.carousel-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 /* Responsive adjustments */
 @media (min-width: 600px) {
   .action-buttons {
     flex-direction: row;
     justify-content: center;
     gap: 16px;
+  }
+  
+  .carousel-actions {
+    justify-content: flex-end;
   }
 }
 
@@ -721,6 +828,10 @@ footer {
   .button {
     padding: 10px 16px;
   }
+  
+  .carousel-image {
+    max-height: 200px;
+  }
 }
 
 /* For very small screens, adjust spacing */
@@ -747,6 +858,19 @@ footer {
 
   .dialog-buttons .button {
     width: 100%;
+  }
+  
+  .carousel-navigation {
+    margin-bottom: 10px;
+  }
+  
+  .carousel-nav-button {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .carousel-counter {
+    font-size: 14px;
   }
 }
 

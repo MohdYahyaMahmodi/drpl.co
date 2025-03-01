@@ -63,22 +63,21 @@ class DrplUI {
         }
     }
 
-// Update just the onDisplayName method in the DrplUI class
-onDisplayName(data) {
-  const displayNameElement = $('display-name');
-  
-  // Clear existing content
-  displayNameElement.innerHTML = '';
-  
-  // Create text node
-  const textNode = document.createTextNode('You are known as: ');
-  displayNameElement.appendChild(textNode);
-  
-  // Create span for the display name
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = data.displayName;
-  displayNameElement.appendChild(nameSpan);
-}
+    onDisplayName(data) {
+        const displayNameElement = $('display-name');
+        
+        // Clear existing content
+        displayNameElement.innerHTML = '';
+        
+        // Create text node
+        const textNode = document.createTextNode('You are known as: ');
+        displayNameElement.appendChild(textNode);
+        
+        // Create span for the display name
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = data.displayName;
+        displayNameElement.appendChild(nameSpan);
+    }
 
     onFileProgress(progress) {
         const peerId = progress.sender;
@@ -89,7 +88,7 @@ onDisplayName(data) {
     }
 
     onFileReceived(file) {
-        this.dialogs.receive.showFile(file);
+        this.dialogs.receive.addFile(file);
     }
 
     onTextReceived(message) {
@@ -191,62 +190,242 @@ class Dialog {
     }
 }
 
+// Enhanced ReceiveDialog with carousel and multi-file support
 class ReceiveDialog extends Dialog {
     constructor() {
         super('receive-dialog');
-        this.setupDownloadButton();
-        this._filesQueue = [];
+        this.files = [];
+        this.currentIndex = 0;
+        this._setupCarousel();
+        this._setupDownloadButtons();
     }
 
-    setupDownloadButton() {
-        $('download').addEventListener('click', () => {
+    _setupCarousel() {
+        // Navigation buttons
+        $('carousel-prev').addEventListener('click', () => this.showPreviousFile());
+        $('carousel-next').addEventListener('click', () => this.showNextFile());
+        
+        // Item container
+        this.carouselContainer = this.element.querySelector('.carousel-item-container');
+    }
+
+    _setupDownloadButtons() {
+        // Current file download
+        $('download-current').addEventListener('click', () => {
+            if (this.files.length > 0) {
+                this.downloadFile(this.files[this.currentIndex]);
+            }
+        });
+        
+        // Download all as zip
+        $('download-all').addEventListener('click', () => {
+            this.downloadAllFiles();
+        });
+        
+        // Close button
+        $('close-receive').addEventListener('click', () => {
             this.hide();
         });
     }
 
-    showFile(file) {
-        this._filesQueue.push(file);
-        if (this._busy) return;
-        this._displayNextFile();
-    }
-
-    _displayNextFile() {
-        if (!this._filesQueue.length) return;
+    // Add a file to the carousel
+    addFile(file) {
+        // Add to files array
+        this.files.push(file);
         
-        this._busy = true;
-        const file = this._filesQueue.shift();
-        this._displayFile(file);
+        // Update title and counter
+        this._updateFileCounter();
+        
+        // If this is the first file, display it
+        if (this.files.length === 1) {
+            this.show();
+            this.displayCurrentFile();
+        }
     }
-
-    _displayFile(file) {
+    
+    // Show the file at the current index
+    displayCurrentFile() {
+        if (this.files.length === 0) return;
+        
+        const file = this.files[this.currentIndex];
         const url = URL.createObjectURL(file.blob);
-        const download = $('download');
-        download.href = url;
-        download.download = file.name;
         
-        $('file-name').textContent = file.name;
-        $('file-size').textContent = this._formatFileSize(file.size);
+        // Clear the container
+        this.carouselContainer.innerHTML = '';
         
-        // Show image preview if it's an image
-        const preview = this.element.querySelector('.preview');
+        // Create file display element
+        const fileItem = document.createElement('div');
+        fileItem.className = 'carousel-item';
+        
+        // File info
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'file-info';
+        
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = file.name;
+        
+        const fileSize = document.createElement('div');
+        fileSize.className = 'file-size';
+        fileSize.textContent = this._formatFileSize(file.size);
+        
+        fileInfo.appendChild(fileName);
+        fileInfo.appendChild(fileSize);
+        fileItem.appendChild(fileInfo);
+        
+        // Preview if it's an image
         if (file.mime.startsWith('image/')) {
-            preview.style.display = 'block';
-            $('img-preview').src = url;
+            const preview = document.createElement('div');
+            preview.className = 'preview';
+            
+            const image = document.createElement('img');
+            image.src = url;
+            image.alt = file.name;
+            image.className = 'carousel-image';
+            
+            preview.appendChild(image);
+            fileItem.appendChild(preview);
         } else {
-            preview.style.display = 'none';
+            // Icon for non-image files
+            const fileIcon = document.createElement('div');
+            fileIcon.className = 'file-icon';
+            
+            const icon = document.createElement('i');
+            icon.className = this._getFileIconClass(file.mime);
+            
+            fileIcon.appendChild(icon);
+            fileItem.appendChild(fileIcon);
         }
         
-        this.show();
+        // Add to container
+        this.carouselContainer.appendChild(fileItem);
         
-        // Auto-download on iOS as it doesn't support the download attribute
-        if (!isDownloadSupported) {
-            download.target = '_blank';
-            const reader = new FileReader();
-            reader.onload = () => download.href = reader.result;
-            reader.readAsDataURL(file.blob);
+        // Update navigation buttons
+        this._updateNavButtons();
+    }
+    
+    // Show the next file in the carousel
+    showNextFile() {
+        if (this.currentIndex < this.files.length - 1) {
+            this.currentIndex++;
+            this.displayCurrentFile();
         }
     }
-
+    
+    // Show the previous file in the carousel
+    showPreviousFile() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.displayCurrentFile();
+        }
+    }
+    
+    // Update file counter display
+    _updateFileCounter() {
+        $('current-file').textContent = this.currentIndex + 1;
+        $('total-files').textContent = this.files.length;
+    }
+    
+    // Update navigation button states
+    _updateNavButtons() {
+        const prevButton = $('carousel-prev');
+        const nextButton = $('carousel-next');
+        
+        // Disable prev button if at first file
+        prevButton.disabled = this.currentIndex === 0;
+        prevButton.classList.toggle('disabled', this.currentIndex === 0);
+        
+        // Disable next button if at last file
+        nextButton.disabled = this.currentIndex === this.files.length - 1;
+        nextButton.classList.toggle('disabled', this.currentIndex === this.files.length - 1);
+        
+        // Update counter
+        this._updateFileCounter();
+    }
+    
+    // Get appropriate icon class based on file type
+    _getFileIconClass(mimeType) {
+        if (mimeType.startsWith('image/')) {
+            return 'fas fa-file-image fa-4x';
+        } else if (mimeType.startsWith('video/')) {
+            return 'fas fa-file-video fa-4x';
+        } else if (mimeType.startsWith('audio/')) {
+            return 'fas fa-file-audio fa-4x';
+        } else if (mimeType.startsWith('text/')) {
+            return 'fas fa-file-alt fa-4x';
+        } else if (mimeType.includes('pdf')) {
+            return 'fas fa-file-pdf fa-4x';
+        } else if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('tar') || mimeType.includes('gz')) {
+            return 'fas fa-file-archive fa-4x';
+        } else if (mimeType.includes('word') || mimeType.includes('doc')) {
+            return 'fas fa-file-word fa-4x';
+        } else if (mimeType.includes('excel') || mimeType.includes('sheet') || mimeType.includes('xls')) {
+            return 'fas fa-file-excel fa-4x';
+        } else if (mimeType.includes('powerpoint') || mimeType.includes('presentation') || mimeType.includes('ppt')) {
+            return 'fas fa-file-powerpoint fa-4x';
+        } else {
+            return 'fas fa-file fa-4x';
+        }
+    }
+    
+    // Download a single file
+    downloadFile(file) {
+        const url = URL.createObjectURL(file.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Clean up the URL object
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+    
+    // Download all files as a ZIP
+    async downloadAllFiles() {
+        if (!window.JSZip) {
+            Events.fire('notify-user', 'ZIP functionality not available');
+            return;
+        }
+        
+        if (this.files.length === 0) return;
+        
+        // Show loading toast
+        Events.fire('notify-user', 'Preparing ZIP file...');
+        
+        try {
+            const zip = new JSZip();
+            
+            // Add all files to the ZIP
+            for (const file of this.files) {
+                // Add file to zip with its name
+                zip.file(file.name, file.blob);
+            }
+            
+            // Generate the ZIP file
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            
+            // Create download link
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `drpl_files_${new Date().toISOString().slice(0, 10)}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            // Clean up
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+            
+            // Show success message
+            Events.fire('notify-user', 'ZIP file created successfully');
+        } catch (error) {
+            console.error('Error creating ZIP file:', error);
+            Events.fire('notify-user', 'Error creating ZIP file');
+        }
+    }
+    
     _formatFileSize(bytes) {
         if (bytes >= 1e9) {
             return (Math.round(bytes / 1e8) / 10) + ' GB';
@@ -258,15 +437,21 @@ class ReceiveDialog extends Dialog {
             return bytes + ' Bytes';
         }
     }
-
+    
+    // Reset the dialog when hiding
     hide() {
         super.hide();
-        setTimeout(() => {
-            this._busy = false;
-            if (this._filesQueue.length) {
-                this._displayNextFile();
-            }
-        }, 300);
+        
+        // Don't reset the files, just close the dialog
+        // This allows reopening the dialog to see the files again
+    }
+    
+    // Clear all files (called when a new session starts)
+    clearFiles() {
+        this.files = [];
+        this.currentIndex = 0;
+        this._updateFileCounter();
+        this.carouselContainer.innerHTML = '';
     }
 }
 
@@ -301,22 +486,41 @@ class SendTextDialog extends Dialog {
     }
 }
 
+// Enhanced ReceiveTextDialog with reply functionality
 class ReceiveTextDialog extends Dialog {
     constructor() {
         super('receive-text-dialog');
         this.setupCopyButton();
+        this.setupReplyButton();
     }
 
     setupCopyButton() {
         $('copy-text').addEventListener('click', () => {
             this.copyText();
-            this.hide();
+        });
+    }
+
+    setupReplyButton() {
+        $('reply-button').addEventListener('click', () => {
+            this.sendReply();
+        });
+
+        // Add enter key support for reply input
+        const replyInput = $('reply-input');
+        replyInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendReply();
+            }
         });
     }
 
     showText(text, senderId) {
         const textElement = $('received-text');
         textElement.innerHTML = '';
+        
+        // Store the sender ID for replying
+        this.currentSender = senderId;
         
         if (isURL(text)) {
             const link = document.createElement('a');
@@ -329,7 +533,38 @@ class ReceiveTextDialog extends Dialog {
         }
         
         this.text = text;
+        
+        // Clear the reply input
+        $('reply-input').textContent = '';
+        
+        // Show the dialog
         this.show();
+        
+        // Focus on the reply input
+        setTimeout(() => $('reply-input').focus(), 300);
+    }
+
+    sendReply() {
+        const reply = $('reply-input').textContent.trim();
+        if (!reply || !this.currentSender) return;
+        
+        // Send the reply message to the original sender
+        Events.fire('send-text', {
+            text: reply,
+            to: this.currentSender
+        });
+        
+        // Play sent sound
+        Events.fire('text-sent');
+        
+        // Clear the reply input
+        $('reply-input').textContent = '';
+        
+        // Show confirmation
+        Events.fire('notify-user', 'Reply sent');
+        
+        // Hide dialog
+        this.hide();
     }
 
     copyText() {
@@ -406,8 +641,93 @@ class ActionDialog extends Dialog {
     }
 }
 
+// Notifications class
+class Notifications {
+    constructor() {
+        // Check if the browser supports notifications
+        if (!('Notification' in window)) return;
+        
+        // Initialize notification permissions
+        this.checkPermission();
+        
+        // Setup notification event listeners
+        Events.on('text-received', e => this.textNotification(e.detail));
+        Events.on('file-received', e => this.fileNotification(e.detail));
+    }
+    
+    checkPermission() {
+        if (Notification.permission === 'granted') {
+            this.hasPermission = true;
+        } else if (Notification.permission !== 'denied') {
+            // We need to ask for permission
+            this.requestPermission();
+        }
+    }
+    
+    requestPermission() {
+        Notification.requestPermission()
+            .then(permission => {
+                if (permission === 'granted') {
+                    this.hasPermission = true;
+                    this.notify('drpl.co', 'Notifications enabled');
+                }
+            });
+    }
+    
+    notify(title, body, data = {}) {
+        if (!this.hasPermission) return;
+        if (document.visibilityState === 'visible') return;
+        
+        const notification = new Notification(title, {
+            body: body,
+            icon: 'favicon.png',
+            data: data
+        });
+        
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+            
+            if (data.action) {
+                data.action();
+            }
+        };
+        
+        // Auto-close after 5 seconds
+        setTimeout(() => notification.close(), 5000);
+        
+        return notification;
+    }
+    
+    textNotification(data) {
+        if (document.visibilityState === 'visible') return;
+        
+        const text = data.text;
+        if (isURL(text)) {
+            this.notify('New Link Received', text, {
+                action: () => window.open(text, '_blank')
+            });
+        } else {
+            this.notify('New Message', text.substring(0, 50) + (text.length > 50 ? '...' : ''), {
+                action: () => drplUI.dialogs.receiveText.showText(text, data.sender)
+            });
+        }
+    }
+    
+    fileNotification(file) {
+        if (document.visibilityState === 'visible') return;
+        
+        this.notify('File Received', file.name, {
+            action: () => {
+                drplUI.dialogs.receive.show();
+            }
+        });
+    }
+}
+
 // Initialize the UI
 let drplUI;
 document.addEventListener('DOMContentLoaded', () => {
     drplUI = new DrplUI();
+    new Notifications();
 });
