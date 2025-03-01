@@ -5,6 +5,7 @@ const CACHE_NAME = 'drpl-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/offline.html',  // Make sure to include the offline page
   '/styles/styles.css',
   '/scripts/ui.js',
   '/scripts/network.js',
@@ -21,11 +22,19 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Caching static assets');
-        return cache.addAll(STATIC_ASSETS)
+        // First, add the offline page separately to ensure it's cached
+        return cache.add('/offline.html')
           .catch(error => {
-            console.error('Cache addAll error:', error);
-            // Continue even if some assets fail to cache
-            return Promise.resolve();
+            console.error('Failed to cache offline.html:', error);
+          })
+          .then(() => {
+            // Then add other static assets
+            return cache.addAll(STATIC_ASSETS.filter(url => url !== '/offline.html'))
+              .catch(error => {
+                console.error('Cache addAll error:', error);
+                // Continue even if some assets fail to cache
+                return Promise.resolve();
+              });
           });
       })
       .then(() => self.skipWaiting())
@@ -100,16 +109,27 @@ self.addEventListener('fetch', (event) => {
             
             // For navigation requests, show the offline page
             if (event.request.mode === 'navigate') {
-              return caches.match('/index.html')
+              return caches.match('/offline.html')
+                .then(response => {
+                  if (response) {
+                    return response;
+                  }
+                  // Fallback to index.html if offline.html not found
+                  return caches.match('/index.html');
+                })
                 .catch(err => {
                   console.error('Error serving offline fallback:', err);
-                  return new Response('Network error occurred', {
+                  return new Response('You are offline. Please check your internet connection.', {
                     status: 503,
-                    statusText: 'Service Unavailable'
+                    statusText: 'Service Unavailable',
+                    headers: new Headers({
+                      'Content-Type': 'text/html'
+                    })
                   });
                 });
             }
             
+            // For non-navigation requests like images, scripts, etc.
             return new Response('Network error occurred', {
               status: 503,
               statusText: 'Service Unavailable',

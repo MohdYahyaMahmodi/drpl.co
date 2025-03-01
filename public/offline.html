@@ -42,6 +42,7 @@
     .container {
       max-width: 600px;
       padding: 0 20px;
+      animation: fadeIn 0.5s ease-in;
     }
 
     .logo {
@@ -50,6 +51,7 @@
       margin-bottom: 30px;
       border-radius: 20px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      animation: pulse 2s infinite;
     }
 
     h1 {
@@ -93,35 +95,86 @@
       margin-bottom: 20px;
       stroke: var(--text-color);
     }
+
+    /* Animations */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.9; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Loading spinner for Try Again button */
+    .button.loading {
+      position: relative;
+      padding-left: 40px;
+    }
+
+    .button.loading::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: rotate 1s linear infinite;
+    }
+
+    @keyframes rotate {
+      0% { transform: translateY(-50%) rotate(0deg); }
+      100% { transform: translateY(-50%) rotate(360deg); }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <img src="images/favicon.png" alt="drpl.co logo" class="logo">
-    
-    <svg class="wifi-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 19L12 19.01M9 15.659C9.93163 14.9331 11.0036 14.5307 12.1059 14.5234C13.2082 14.5161 14.2857 14.9042 15.228 15.618M6 12.657C7.58531 11.2328 9.53685 10.4431 11.5522 10.3571C13.5676 10.2711 15.5708 10.8939 17.263 12.137M3 9.657C5.19783 7.78685 7.89192 6.75027 10.6837 6.69542C13.4755 6.64058 16.2097 7.57076 18.47 9.343" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    </svg>
+    <img src="images/app.png" alt="drpl.co logo" class="logo">
     
     <h1>No Internet Connection</h1>
     <p>drpl.co requires an internet connection to discover and connect with other devices on your network. Please check your connection and try again.</p>
-    <button class="button" onclick="window.location.reload()">Try Again</button>
+    <button class="button" id="try-again">Try Again</button>
   </div>
 
   <script>
-    // Check for dark mode preference
-    function applyTheme() {
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme) {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      }
-    }
+    // Apply theme based on site preference
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'dark'; // Default to dark
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
     
-    // Apply theme on load
-    applyTheme();
+    const tryAgainButton = document.getElementById('try-again');
+    
+    // Check for network status changes
+    window.addEventListener('online', () => {
+      console.log('Back online, reloading...');
+      window.location.reload();
+    });
+    
+    // Add loading state to button during reload
+    tryAgainButton.addEventListener('click', () => {
+      tryAgainButton.classList.add('loading');
+      tryAgainButton.textContent = 'Checking connection...';
+      
+      // Attempt to reload the page
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    });
+    
+    // Periodically check if we're back online (as a fallback)
+    setInterval(() => {
+      if (navigator.onLine) {
+        window.location.reload();
+      }
+    }, 5000);
   </script>
 </body>
 </html>
