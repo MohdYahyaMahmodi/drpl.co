@@ -349,17 +349,49 @@ class ReceiveDialog extends Dialog {
     }
     
     _setupTouchNavigation() {
-        // Add touch navigation support
+        // Add touch navigation support for mobile devices
         let startX, startY;
+        let isSwiping = false;
         
-        this.carouselContainer.addEventListener('touchstart', (e) => {
+        // We need to listen on the dialog container level instead of just the carousel
+        const dialogContent = this.element.querySelector('.dialog-content');
+        
+        dialogContent.addEventListener('touchstart', (e) => {
+            // Don't start a swipe if we're in transition
             if (this.isTransitioning) return;
+            
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
+            isSwiping = true;
+            
+            // Prevent default only when needed
+            if (e.target.closest('.carousel-item-container')) {
+                // We're touching inside the carousel
+                e.stopPropagation();
+            }
         }, { passive: true });
         
-        this.carouselContainer.addEventListener('touchend', (e) => {
-            if (this.isTransitioning || !startX || !startY) return;
+        dialogContent.addEventListener('touchmove', (e) => {
+            // Detect horizontal swipe and prevent page scroll if needed
+            if (!isSwiping || !startX || !startY) return;
+            
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            const diffX = startX - currentX;
+            const diffY = startY - currentY;
+            
+            // If horizontal swipe is more significant than vertical, prevent default scrolling
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 10) {
+                e.preventDefault();
+            }
+        }, { passive: false }); // Need passive: false to be able to preventDefault
+        
+        dialogContent.addEventListener('touchend', (e) => {
+            if (!isSwiping || this.isTransitioning || !startX || !startY) {
+                isSwiping = false;
+                return;
+            }
             
             const endX = e.changedTouches[0].clientX;
             const endY = e.changedTouches[0].clientY;
@@ -376,11 +408,17 @@ class ReceiveDialog extends Dialog {
                     // Swipe right, go to previous
                     this.showPreviousFile();
                 }
+                
+                // Prevent other handlers if we're handling this as a swipe
+                e.preventDefault();
+                e.stopPropagation();
             }
             
+            // Reset
             startX = null;
             startY = null;
-        }, { passive: true });
+            isSwiping = false;
+        }, { passive: false }); // Need passive: false to be able to preventDefault
     }
 
     // Add a file to the carousel
