@@ -287,4 +287,4 @@ Object.defineProperty(String.prototype, 'hashCode', {
 });
 
 // Start the server
-const server = new DrplServer(process.env.PORT || 3000);
+const server = new DrplServer(process.env.PORT || 3002);
