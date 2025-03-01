@@ -7,7 +7,7 @@ const WebSocket = require('ws');
 const parser = require('ua-parser-js');
 const { uniqueNamesGenerator, animals, colors } = require('unique-names-generator');
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3002;
 
 // Graceful shutdown
 process.on('SIGINT', () => {
