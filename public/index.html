@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drpl.co | v3</title>
+  <title>Drpl.co | v4</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
   />
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="styles.css?v=6.0.4" />
+  <link rel="stylesheet" href="styles.css?v=7.0.0" />
 </head>
 <body class="h-screen overflow-hidden bg-white">
   <!-- Wave Animation -->
@@ -30,12 +30,14 @@
     <button
       id="author-button"
       class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+      aria-label="About Author"
     >
       <i class="fas fa-user-circle"></i>
     </button>
     <button
       id="info-button"
       class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+      aria-label="About Drpl.co"
     >
       <i class="fas fa-info-circle"></i>
     </button>
@@ -52,6 +54,14 @@
         >
           Open Drpl.co on your other device to get started
         </p>
+
+        <!-- Connection Status Indicator -->
+        <div id="connection-status" class="mt-2 mb-4 text-sm">
+          <span class="inline-flex items-center">
+            <span id="connection-indicator" class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+            <span id="connection-text">Connecting...</span>
+          </span>
+        </div>
 
         <!-- Scroll container for peers -->
         <div
@@ -94,6 +104,7 @@
         <button
           id="info-modal-close"
           class="text-[#333533] hover:text-[#242423]"
+          aria-label="Close"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -116,8 +127,9 @@
 
         <div class="mt-6 pt-6 border-t border-gray-200">
           <a
-            href="#"
+            href="https://github.com/mohdmfci/drpl.co"
             target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center space-x-2 text-[#333533] hover:text-[#242423]"
           >
             <i class="fab fa-github text-xl"></i>
@@ -144,6 +156,7 @@
         <button
           id="author-modal-close"
           class="text-[#333533] hover:text-[#242423]"
+          aria-label="Close"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -161,30 +174,38 @@
 
         <div class="flex justify-center space-x-4">
           <a
-            href="#"
+            href="https://twitter.com/mohdmfci"
             target="_blank"
+            rel="noopener noreferrer"
             class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+            aria-label="Twitter"
           >
             <i class="fab fa-twitter"></i>
           </a>
           <a
-            href="#"
+            href="https://github.com/mohdmfci"
             target="_blank"
+            rel="noopener noreferrer"
             class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+            aria-label="GitHub"
           >
             <i class="fab fa-github"></i>
           </a>
           <a
-            href="#"
+            href="https://linkedin.com/in/mohdmfci"
             target="_blank"
+            rel="noopener noreferrer"
             class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+            aria-label="LinkedIn"
           >
             <i class="fab fa-linkedin"></i>
           </a>
           <a
-            href="#"
+            href="https://mahmodi.com"
             target="_blank"
+            rel="noopener noreferrer"
             class="text-2xl text-[#333533] hover:text-[#242423] transition-colors"
+            aria-label="Website"
           >
             <i class="fas fa-globe"></i>
           </a>
@@ -313,6 +334,9 @@
     <div
       class="relative bg-white rounded-lg max-w-sm w-full p-6 text-center flex flex-col items-center justify-center"
     >
+      <div class="animate-spin mb-4 text-[#333533]">
+        <i class="fas fa-circle-notch text-3xl"></i>
+      </div>
       <h2 class="text-xl font-semibold text-[#242423] mb-2">Waiting for Sender</h2>
       <p class="text-[#333533] opacity-75 mb-4" id="receiving-status-text"></p>
     </div>
@@ -335,7 +359,7 @@
       <textarea
         id="message-input"
         rows="4"
-        class="w-full p-2 border border-gray-300 rounded mb-4 focus:outline-none"
+        class="w-full p-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-[#333533]"
         placeholder="Type your message..."
       ></textarea>
       <div class="flex justify-end space-x-4">
@@ -369,10 +393,16 @@
       <h2 class="text-xl font-semibold text-[#242423] mb-2" id="incoming-message-header"></h2>
       <div
         id="incoming-message-text"
-        class="mb-4 p-2 border border-gray-300 rounded h-32 overflow-y-auto"
+        class="mb-4 p-4 border border-gray-300 rounded h-32 overflow-y-auto bg-gray-50"
         style="white-space: pre-wrap;"
       ></div>
       <div class="flex justify-end space-x-4">
+        <button
+          id="incoming-message-respond"
+          class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423]"
+        >
+          Respond Back
+        </button>
         <button
           id="incoming-message-close"
           class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
@@ -394,6 +424,9 @@
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
     <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col items-center">
+      <div class="text-green-500 mb-4">
+        <i class="fas fa-check-circle text-4xl"></i>
+      </div>
       <h2 class="text-xl font-semibold text-[#242423] mb-2" id="transfer-complete-title"></h2>
       <p class="text-[#333533] opacity-75 mb-4" id="transfer-complete-text"></p>
       <button
@@ -416,11 +449,14 @@
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
+      <div class="text-red-500 mb-4">
+        <i class="fas fa-exclamation-triangle text-4xl"></i>
+      </div>
       <h2 class="text-xl font-semibold text-[#242423] mb-2">
         Connection Lost
       </h2>
       <p class="text-[#333533] opacity-75 mb-4">
-        The other device has disconnected.
+        The connection with the other device has been lost.
       </p>
       <button
         id="peer-lost-close"
@@ -442,12 +478,24 @@
       class="absolute inset-0 bg-black bg-opacity-50"
     ></div>
     <div class="relative bg-white rounded-lg max-w-sm w-full p-6 flex flex-col items-center">
+      <div class="text-red-500 mb-4">
+        <i class="fas fa-wifi text-4xl"></i>
+      </div>
       <h2 class="text-xl font-semibold text-[#242423] mb-2">
         Server Disconnected
       </h2>
       <p class="text-[#333533] opacity-75 mb-4">
-        The server connection has been lost. Please refresh or try again later.
+        The server connection has been lost. Trying to reconnect...
       </p>
+      <div id="reconnect-attempt" class="text-sm text-gray-500 mb-4">
+        Reconnect attempt: 1
+      </div>
+      <button
+        id="server-reconnect-button"
+        class="px-6 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] mb-2"
+      >
+        Reconnect Now
+      </button>
       <button
         id="server-disconnected-close"
         class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
@@ -475,8 +523,9 @@
       </h2>
       <div
         id="drop-zone"
-        class="border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center py-8 mb-4"
+        class="border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center py-8 mb-4 hover:bg-gray-50 transition-colors"
       >
+        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
         <p class="text-gray-500 text-center">
           Drop files here or click to select
         </p>
@@ -493,7 +542,7 @@
         class="overflow-y-auto max-h-48 mb-4"
       >
       </div>
-      <div class="flex justify-end space-x-4">
+      <div class="flex flex-wrap justify-end space-x-4">
         <button
           id="send-files-cancel"
           class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
@@ -506,6 +555,42 @@
           disabled
         >
           Send
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sending Files Modal (sender side) -->
+  <div
+    id="sending-files-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="sending-files-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-lg w-full p-6">
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">
+        Sending files
+      </h2>
+      <div id="sending-files-info" class="mb-4">
+        <p class="text-sm text-[#333533]" id="sending-file-name"></p>
+        <p class="text-xs text-gray-500" id="sending-speed"></p>
+        <p class="text-xs text-gray-500" id="sending-eta"></p>
+      </div>
+      <div class="overflow-hidden bg-gray-200 rounded-full h-2.5 mb-4">
+        <div id="sending-progress-bar" class="bg-[#333533] h-2.5 rounded-full transition-all" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between items-center">
+        <div id="sending-stats" class="text-sm text-gray-500">
+          <span id="sending-bytes">0 B</span> / <span id="sending-total-bytes">0 B</span>
+        </div>
+        <button
+          id="sending-cancel-button"
+          class="px-4 py-1 border border-[#333533] rounded text-[#333533] hover:text-[#242423] text-sm"
+        >
+          Cancel
         </button>
       </div>
     </div>
@@ -527,12 +612,28 @@
       <h2 class="text-xl font-semibold text-[#242423] mb-2">
         Receiving files
       </h2>
-      <p class="text-[#333533] text-sm mb-4">
-        Please wait while files are being transferred...
-      </p>
+      <div id="receiving-files-info" class="mb-4">
+        <p class="text-sm text-[#333533]" id="receiving-file-name"></p>
+        <p class="text-xs text-gray-500" id="receiving-speed"></p>
+        <p class="text-xs text-gray-500" id="receiving-eta"></p>
+      </div>
+      <div class="overflow-hidden bg-gray-200 rounded-full h-2.5 mb-4">
+        <div id="receiving-overall-progress" class="bg-[#333533] h-2.5 rounded-full transition-all" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between items-center">
+        <div id="receiving-stats" class="text-sm text-gray-500">
+          <span id="receiving-file-count">File 0 of 0</span> - <span id="receiving-bytes">0 B</span> / <span id="receiving-total-bytes">0 B</span>
+        </div>
+        <button
+          id="receiving-cancel-button"
+          class="px-4 py-1 border border-[#333533] rounded text-[#333533] hover:text-[#242423] text-sm"
+        >
+          Cancel
+        </button>
+      </div>
       <div
         id="file-progress-list"
-        class="space-y-4"
+        class="space-y-4 mt-4"
       >
       </div>
     </div>
@@ -556,14 +657,21 @@
         <button
           id="file-preview-close"
           class="text-[#333533] hover:text-[#242423]"
+          aria-label="Close"
         >
           <i class="fas fa-times"></i>
         </button>
       </div>
+      
+      <div id="file-list-preview" class="mb-4 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+        <!-- Will be populated with file list -->
+      </div>
+      
       <div
         id="file-preview-content"
-        class="flex flex-col items-center justify-center"
+        class="flex flex-col items-center justify-center mb-4 bg-gray-50 border border-gray-200 rounded p-4 min-h-[200px]"
       >
+        <!-- Preview content here -->
       </div>
 
       <div class="flex items-center justify-between mt-4 flex-wrap gap-2">
@@ -572,7 +680,7 @@
           id="prev-file-btn"
           class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
         >
-          <i class="fas fa-chevron-left"></i>
+          <i class="fas fa-chevron-left"></i> Previous
         </button>
 
         <!-- MIDDLE: Download buttons -->
@@ -581,13 +689,13 @@
             id="download-current-file"
             class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
           >
-            Download
+            <i class="fas fa-download"></i> Download
           </button>
           <button
             id="download-all-files"
             class="px-4 py-2 bg-[#333533] text-white rounded hover:bg-[#242423] text-sm sm:text-base"
           >
-            Download All
+            <i class="fas fa-download"></i> Download All
           </button>
         </div>
 
@@ -596,13 +704,41 @@
           id="next-file-btn"
           class="px-4 py-2 border border-[#333533] text-[#333533] rounded hover:text-[#242423] text-sm sm:text-base"
         >
-          <i class="fas fa-chevron-right"></i>
+          Next <i class="fas fa-chevron-right"></i>
         </button>
       </div>
     </div>
   </div>
 
+  <!-- Error Modal -->
+  <div
+    id="error-modal"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="display: none;"
+  >
+    <div
+      id="error-modal-backdrop"
+      class="absolute inset-0 bg-black bg-opacity-50"
+    ></div>
+    <div class="relative bg-white rounded-lg max-w-md w-full p-6 flex flex-col items-center">
+      <div class="text-red-500 mb-4">
+        <i class="fas fa-exclamation-circle text-4xl"></i>
+      </div>
+      <h2 class="text-xl font-semibold text-[#242423] mb-2">Error</h2>
+      <p class="text-[#333533] opacity-75 mb-4 text-center" id="error-message"></p>
+      <button
+        id="error-modal-close"
+        class="px-6 py-2 border border-[#333533] rounded text-[#333533] hover:text-[#242423]"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
+  <!-- StreamSaver.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/StreamSaver.js/2.0.6/StreamSaver.min.js"></script>
+  
   <!-- Main JS -->
-  <script src="main.js?v=6.0.4"></script>
+  <script src="main.js?v=7.0.0"></script>
 </body>
 </html>
