@@ -116,6 +116,11 @@ class DrplUI {
     onFileTransferComplete() {
         // File transfer completed, update UI if needed
         console.log("File transfer completed");
+        
+        // Ensure the progress dialog is properly updated or hidden
+        setTimeout(() => {
+            this.dialogs.transferProgress.checkAndHideIfDone();
+        }, 500);
     }
 
     onTextReceived(message) {
@@ -846,7 +851,7 @@ class ActionDialog extends Dialog {
     }
 }
 
-// Transfer Progress Dialog
+// Updated Transfer Progress Dialog with close button and improved closing behavior
 class TransferProgressDialog extends Dialog {
     constructor() {
         super('transfer-progress-dialog');
@@ -854,6 +859,33 @@ class TransferProgressDialog extends Dialog {
         this.activeTransfers = {};
         this.lastUpdateTime = Date.now();
         this.lastBytes = 0;
+        this.setupEscapeKey();
+        this.setupManualClose();
+    }
+    
+    setupEscapeKey() {
+        // Add keyboard Escape key support
+        this._keyHandler = (e) => {
+            // Only process if dialog is active
+            if (!this.element.classList.contains('active')) return;
+            
+            if (e.key === 'Escape') {
+                this.hide();
+                e.preventDefault();
+            }
+        };
+        
+        window.addEventListener('keydown', this._keyHandler);
+    }
+    
+    setupManualClose() {
+        // Add event listener to the close button
+        const closeButton = $('close-transfer');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                this.hide();
+            });
+        }
     }
     
     reset() {
@@ -929,6 +961,30 @@ class TransferProgressDialog extends Dialog {
         }
         
         this.updateUI(peerId);
+        
+        // Auto-close if transfer completed
+        if (progress >= 1) {
+            // Mark the transfer as completed
+            transfer.completed = true;
+            
+            // Check if all transfers are completed
+            this.checkAndHideIfDone();
+        }
+    }
+    
+    checkAndHideIfDone() {
+        // Check if all active transfers are completed
+        const allCompleted = Object.values(this.activeTransfers).every(transfer => 
+            transfer.completed || transfer.progress >= 1
+        );
+        
+        if (allCompleted && Object.keys(this.activeTransfers).length > 0) {
+            // Give a short delay to show completion state before closing
+            setTimeout(() => {
+                this.hide();
+                this.activeTransfers = {}; // Clear the transfers
+            }, 1500);
+        }
     }
     
     nextFile(peerId, fileName) {
@@ -972,16 +1028,32 @@ class TransferProgressDialog extends Dialog {
     }
     
     endTransfer(peerId) {
-        delete this.activeTransfers[peerId];
+        if (!this.activeTransfers[peerId]) return;
         
-        // If no more active transfers, hide the dialog
-        if (Object.keys(this.activeTransfers).length === 0) {
-            setTimeout(() => this.hide(), 1000); // Delay to show 100% for a moment
-        } else {
-            // Otherwise, update UI with the next active transfer
-            const nextPeerId = Object.keys(this.activeTransfers)[0];
-            this.updateUI(nextPeerId);
-        }
+        // Mark this transfer as completed
+        this.activeTransfers[peerId].completed = true;
+        this.activeTransfers[peerId].progress = 1;
+        
+        // Update the UI to show 100%
+        this.updateUI(peerId);
+        
+        // Check if we should hide the dialog
+        this.checkAndHideIfDone();
+    }
+    
+    // Override the hide method to ensure we clean up properly
+    hide() {
+        super.hide();
+        // Clean up on hide
+        setTimeout(() => {
+            this.activeTransfers = {};
+        }, 300);
+    }
+    
+    // Clean up resources when the component is destroyed
+    destroy() {
+        // Remove event listeners
+        window.removeEventListener('keydown', this._keyHandler);
     }
 }
 
