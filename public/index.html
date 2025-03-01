@@ -38,6 +38,51 @@
     
     <!-- Canonical URL -->
     <link rel="canonical" href="https://drpl.co/">
+
+    <!-- Add these lines in the <head> section of your index.html -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="drpl.co">
+<meta name="theme-color" content="#121212">
+<link rel="apple-touch-icon" href="images/favicon.png">
+
+<!-- Add this right after the <body> tag in your index.html -->
+<div class="splash-screen" id="splash-screen">
+  <img src="images/favicon.png" alt="drpl.co" class="splash-logo">
+</div>
+
+<!-- Add this script right before the closing </body> tag -->
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('script/sw.js')
+        .then(registration => {
+          console.log('Service Worker registered with scope:', registration.scope);
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error);
+        });
+    });
+  }
+
+  // Handle splash screen
+  document.addEventListener('DOMContentLoaded', () => {
+    // Hide splash screen after content loads
+    setTimeout(() => {
+      const splashScreen = document.getElementById('splash-screen');
+      if (splashScreen) {
+        splashScreen.classList.add('hidden');
+        
+        // Remove from DOM after transition completes
+        setTimeout(() => {
+          splashScreen.remove();
+        }, 500);
+      }
+    }, 1500); // Show splash for 1.5 seconds
+  });
+</script>
     
     <!-- Preload theme script - MUST come before CSS -->
     <script>

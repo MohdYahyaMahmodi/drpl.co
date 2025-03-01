@@ -30,8 +30,6 @@ Visit the live site: [https://drpl.co](https://drpl.co)
   <img src="https://drpl.co/images/mobile.png" alt="drpl.co mobile interface" width="300">
 </p>
 
-> Note: Replace the image URLs with actual screenshots of your application once you've uploaded them to your GitHub repository.
-
 ## Features
 
 - **Cross-Platform Compatibility**: Works on all major operating systems and devices
