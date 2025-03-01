@@ -149,7 +149,7 @@ footer {
 .peer-icon {
   width: 70px;
   height: 70px;
-  border-radius: 50%;
+  border-radius: 12px;
   background-color: var(--primary-color);
   color: white;
   display: flex;
@@ -160,7 +160,7 @@ footer {
 }
 
 .peer-icon i {
-  font-size: 32px;
+  font-size: 24px;
 }
 
 .peer-name {
