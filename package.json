@@ -2,7 +2,7 @@
   "name": "drpl.co",
   "version": "1.0.0",
   "description": "drpl.co is a Snapdrop-like P2P file transfer app",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node index.js"
   },
