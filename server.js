@@ -433,7 +433,7 @@ class DrplServer {
 const app = express();
 
 // Serve static files from the current directory
-app.use(express.static('.'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Create HTTP server
 const server = http.createServer(app);
