@@ -1,7 +1,7 @@
 /* Base Styles */
 :root {
   --icon-size: 24px;
-  --primary-color: #000;
+  --primary-color: #111111;
   --bg-color: #fff;
   --accent-color: #007bff;
   --border-color: #e0e0e0;
@@ -104,6 +104,10 @@ footer {
 .icon-button:hover {
   background-color: rgba(0, 0, 0, 0.05);
   transform: scale(1.05);
+}
+
+.fas {
+
 }
 
 .button {
@@ -211,7 +215,7 @@ footer {
   width: 70px;
   height: 70px;
   border-radius: var(--radius-medium);
-  background-color: var(--primary-color);
+  background-color: #5e94ff;
   color: white;
   display: flex;
   align-items: center;
@@ -760,7 +764,7 @@ footer {
 }
 
 #display-name span {
-  background-color: black;
+  background-color: #5E94FF;
   color: white;
   padding: 4px 10px;
   border-radius: 4px;
