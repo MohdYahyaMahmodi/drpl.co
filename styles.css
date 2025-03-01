@@ -27,7 +27,7 @@
   --no-peers-bg: rgba(255, 255, 255, 0.8);
   --display-name-bg: rgba(255, 255, 255, 0.8);
   --icon-button-bg: rgba(233, 233, 233, 0.8);
-  --icon-button-hover-bg: rgba(0, 0, 0, 0.05);
+  --icon-button-hover-bg: rgb(31, 31, 31);
   --carousel-nav-bg: #f5f5f5;
   --carousel-nav-hover-bg: #e5e5e5;
   --header-text-color: #333;
