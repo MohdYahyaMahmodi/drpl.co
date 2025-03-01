@@ -233,14 +233,14 @@ class ReceiveDialog extends Dialog {
         // Add to files array
         this.files.push(file);
         
-        // Update title and counter
-        this._updateFileCounter();
-        
         // If this is the first file, display it
         if (this.files.length === 1) {
             this.show();
-            this.displayCurrentFile();
+            this.currentIndex = 0;
         }
+
+        // Always update the UI when adding files
+        this.displayCurrentFile();
     }
     
     // Show the file at the current index
@@ -300,7 +300,8 @@ class ReceiveDialog extends Dialog {
         // Add to container
         this.carouselContainer.appendChild(fileItem);
         
-        // Update navigation buttons
+        // Update file counter and navigation buttons
+        this._updateFileCounter();
         this._updateNavButtons();
     }
     
@@ -326,21 +327,27 @@ class ReceiveDialog extends Dialog {
         $('total-files').textContent = this.files.length;
     }
     
-    // Update navigation button states
+    // Update navigation button states - FIXED to ensure buttons aren't disabled
     _updateNavButtons() {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
-        // Disable prev button if at first file
-        prevButton.disabled = this.currentIndex === 0;
-        prevButton.classList.toggle('disabled', this.currentIndex === 0);
+        // Enable all buttons first to avoid stuck disabled state
+        prevButton.disabled = false;
+        nextButton.disabled = false;
+        prevButton.classList.remove('disabled');
+        nextButton.classList.remove('disabled');
         
-        // Disable next button if at last file
-        nextButton.disabled = this.currentIndex === this.files.length - 1;
-        nextButton.classList.toggle('disabled', this.currentIndex === this.files.length - 1);
+        // Only disable if we're at the ends of the carousel
+        if (this.currentIndex === 0) {
+            prevButton.disabled = true;
+            prevButton.classList.add('disabled');
+        }
         
-        // Update counter
-        this._updateFileCounter();
+        if (this.currentIndex >= this.files.length - 1) {
+            nextButton.disabled = true;
+            nextButton.classList.add('disabled');
+        }
     }
     
     // Get appropriate icon class based on file type
@@ -641,93 +648,13 @@ class ActionDialog extends Dialog {
     }
 }
 
-// Notifications class
-class Notifications {
-    constructor() {
-        // Check if the browser supports notifications
-        if (!('Notification' in window)) return;
-        
-        // Initialize notification permissions
-        this.checkPermission();
-        
-        // Setup notification event listeners
-        Events.on('text-received', e => this.textNotification(e.detail));
-        Events.on('file-received', e => this.fileNotification(e.detail));
-    }
-    
-    checkPermission() {
-        if (Notification.permission === 'granted') {
-            this.hasPermission = true;
-        } else if (Notification.permission !== 'denied') {
-            // We need to ask for permission
-            this.requestPermission();
-        }
-    }
-    
-    requestPermission() {
-        Notification.requestPermission()
-            .then(permission => {
-                if (permission === 'granted') {
-                    this.hasPermission = true;
-                    this.notify('drpl.co', 'Notifications enabled');
-                }
-            });
-    }
-    
-    notify(title, body, data = {}) {
-        if (!this.hasPermission) return;
-        if (document.visibilityState === 'visible') return;
-        
-        const notification = new Notification(title, {
-            body: body,
-            icon: 'favicon.png',
-            data: data
-        });
-        
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
-            
-            if (data.action) {
-                data.action();
-            }
-        };
-        
-        // Auto-close after 5 seconds
-        setTimeout(() => notification.close(), 5000);
-        
-        return notification;
-    }
-    
-    textNotification(data) {
-        if (document.visibilityState === 'visible') return;
-        
-        const text = data.text;
-        if (isURL(text)) {
-            this.notify('New Link Received', text, {
-                action: () => window.open(text, '_blank')
-            });
-        } else {
-            this.notify('New Message', text.substring(0, 50) + (text.length > 50 ? '...' : ''), {
-                action: () => drplUI.dialogs.receiveText.showText(text, data.sender)
-            });
-        }
-    }
-    
-    fileNotification(file) {
-        if (document.visibilityState === 'visible') return;
-        
-        this.notify('File Received', file.name, {
-            action: () => {
-                drplUI.dialogs.receive.show();
-            }
-        });
-    }
-}
-
 // Initialize the UI
 let drplUI;
 document.addEventListener('DOMContentLoaded', () => {
     drplUI = new DrplUI();
-    new Notifications();
+    
+    // Use the NotificationManager instead of directly instantiating a Notifications class
+    if (window.NotificationManager) {
+        window.notificationHandler = window.NotificationManager.init();
+    }
 });

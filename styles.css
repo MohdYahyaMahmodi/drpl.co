@@ -536,14 +536,20 @@ footer {
   transition: all 0.2s;
 }
 
+.carousel-nav-button {
+  transition: opacity 0.3s, background-color 0.2s, transform 0.2s !important;
+}
+
+
 .carousel-nav-button:hover:not(:disabled) {
   background-color: var(--carousel-nav-hover-bg);
   transform: scale(1.05);
 }
 
-.carousel-nav-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.carousel-nav-button.disabled {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
 }
 
 .carousel-counter {
@@ -551,6 +557,8 @@ footer {
   font-weight: 500;
   color: var(--text-color);
 }
+
+
 
 .carousel-item-container {
   position: relative;
@@ -562,6 +570,12 @@ footer {
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+}
+
+.carousel-nav-button:not(.disabled):hover {
+  background-color: var(--carousel-nav-hover-bg);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .carousel-item-container:active {
