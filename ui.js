@@ -3,6 +3,14 @@ const $ = id => document.getElementById(id);
 const isURL = text => /^((https?:\/\/|www)[^\s]+)/g.test(text.toLowerCase());
 const isDownloadSupported = typeof document.createElement('a').download !== 'undefined';
 
+// Security helper to prevent XSS attacks
+const sanitizeText = (text) => {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
 // UI classes
 class DrplUI {
     constructor() {
@@ -61,6 +69,9 @@ class DrplUI {
         if (peerElement) {
             peerElement.remove();
         }
+        
+        // We don't close dialogs when peers leave, files should still be accessible
+        // This comment is intentionally left here to document the change
     }
 
     onDisplayName(data) {
@@ -97,7 +108,7 @@ class DrplUI {
 
     showToast(message) {
         const toast = $('toast');
-        toast.textContent = message;
+        toast.textContent = sanitizeText(message);
         toast.classList.add('active');
         
         setTimeout(() => {
@@ -117,13 +128,17 @@ class DrplUI {
         const deviceType = this.getDeviceType(peer.name);
         const deviceIcon = this.getDeviceIcon(deviceType);
         
+        // Use sanitized values to prevent XSS
+        const displayName = sanitizeText(peer.name.displayName);
+        const deviceName = sanitizeText(peer.name.deviceName);
+        
         peerElement.innerHTML = `
             <div class="peer-icon">
                 <i class="${deviceIcon}"></i>
             </div>
             <div class="progress-circle"></div>
-            <div class="peer-name">${peer.name.displayName}</div>
-            <div class="peer-device">${peer.name.deviceName}</div>
+            <div class="peer-name">${displayName}</div>
+            <div class="peer-device">${deviceName}</div>
         `;
         
         peerElement.addEventListener('click', () => {
@@ -198,6 +213,7 @@ class ReceiveDialog extends Dialog {
         this.currentIndex = 0;
         this._setupCarousel();
         this._setupDownloadButtons();
+        this._setupTouchEvents();
     }
 
     _setupCarousel() {
@@ -226,6 +242,33 @@ class ReceiveDialog extends Dialog {
         $('close-receive').addEventListener('click', () => {
             this.hide();
         });
+    }
+
+    _setupTouchEvents() {
+        // Add touch swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        this.carouselContainer.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+        
+        this.carouselContainer.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            this._handleSwipe(touchStartX, touchEndX);
+        }, { passive: true });
+    }
+    
+    _handleSwipe(startX, endX) {
+        const threshold = 50; // Minimum pixel distance for a swipe
+        
+        if (startX - endX > threshold) {
+            // Swipe left, show next file
+            this.showNextFile();
+        } else if (endX - startX > threshold) {
+            // Swipe right, show previous file
+            this.showPreviousFile();
+        }
     }
 
     // Add a file to the carousel
@@ -263,7 +306,7 @@ class ReceiveDialog extends Dialog {
         
         const fileName = document.createElement('div');
         fileName.className = 'file-name';
-        fileName.textContent = file.name;
+        fileName.textContent = sanitizeText(file.name);
         
         const fileSize = document.createElement('div');
         fileSize.className = 'file-size';
@@ -273,6 +316,9 @@ class ReceiveDialog extends Dialog {
         fileInfo.appendChild(fileSize);
         fileItem.appendChild(fileInfo);
         
+        // Extract file extension
+        const fileExt = this._getFileExtension(file.name);
+        
         // Preview if it's an image
         if (file.mime.startsWith('image/')) {
             const preview = document.createElement('div');
@@ -280,7 +326,7 @@ class ReceiveDialog extends Dialog {
             
             const image = document.createElement('img');
             image.src = url;
-            image.alt = file.name;
+            image.alt = sanitizeText(file.name);
             image.className = 'carousel-image';
             
             preview.appendChild(image);
@@ -290,10 +336,20 @@ class ReceiveDialog extends Dialog {
             const fileIcon = document.createElement('div');
             fileIcon.className = 'file-icon';
             
+            const iconContainer = document.createElement('div');
+            iconContainer.className = 'file-type-container';
+            
             const icon = document.createElement('i');
             icon.className = this._getFileIconClass(file.mime);
             
-            fileIcon.appendChild(icon);
+            // Add file extension display
+            const extLabel = document.createElement('div');
+            extLabel.className = 'file-extension';
+            extLabel.textContent = fileExt ? fileExt.toUpperCase() : 'FILE';
+            
+            iconContainer.appendChild(icon);
+            fileIcon.appendChild(iconContainer);
+            fileIcon.appendChild(extLabel);
             fileItem.appendChild(fileIcon);
         }
         
@@ -343,6 +399,11 @@ class ReceiveDialog extends Dialog {
         this._updateFileCounter();
     }
     
+    // Get file extension
+    _getFileExtension(filename) {
+        return filename.split('.').pop().toLowerCase();
+    }
+    
     // Get appropriate icon class based on file type
     _getFileIconClass(mimeType) {
         if (mimeType.startsWith('image/')) {
@@ -363,6 +424,8 @@ class ReceiveDialog extends Dialog {
             return 'fas fa-file-excel fa-4x';
         } else if (mimeType.includes('powerpoint') || mimeType.includes('presentation') || mimeType.includes('ppt')) {
             return 'fas fa-file-powerpoint fa-4x';
+        } else if (mimeType.includes('executable') || mimeType.includes('application/x-msdownload')) {
+            return 'fas fa-file-code fa-4x';
         } else {
             return 'fas fa-file fa-4x';
         }
@@ -526,10 +589,11 @@ class ReceiveTextDialog extends Dialog {
             const link = document.createElement('a');
             link.href = text.startsWith('http') ? text : `http://${text}`;
             link.target = '_blank';
-            link.textContent = text;
+            link.rel = 'noopener noreferrer'; // Security best practice
+            link.textContent = sanitizeText(text);
             textElement.appendChild(link);
         } else {
-            textElement.textContent = text;
+            textElement.textContent = sanitizeText(text);
         }
         
         this.text = text;
@@ -632,7 +696,7 @@ class ActionDialog extends Dialog {
     }
 
     show(peerName) {
-        $('action-title').textContent = `Connect with ${peerName}`;
+        $('action-title').textContent = `Connect with ${sanitizeText(peerName)}`;
         super.show();
     }
 
@@ -678,8 +742,8 @@ class Notifications {
         if (!this.hasPermission) return;
         if (document.visibilityState === 'visible') return;
         
-        const notification = new Notification(title, {
-            body: body,
+        const notification = new Notification(sanitizeText(title), {
+            body: sanitizeText(body),
             icon: 'favicon.png',
             data: data
         });
@@ -717,7 +781,7 @@ class Notifications {
     fileNotification(file) {
         if (document.visibilityState === 'visible') return;
         
-        this.notify('File Received', file.name, {
+        this.notify('File Received', sanitizeText(file.name), {
             action: () => {
                 drplUI.dialogs.receive.show();
             }

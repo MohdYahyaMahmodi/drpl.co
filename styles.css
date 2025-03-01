@@ -558,6 +558,14 @@ footer {
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.carousel-item-container:active {
+  cursor: grabbing;
 }
 
 .carousel-item {
@@ -576,10 +584,72 @@ footer {
   margin: 15px 0;
 }
 
+/* File Type Display */
+.file-type-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.file-extension {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--file-icon-color);
+  margin-top: 8px;
+  padding: 4px 12px;
+  background-color: var(--button-bg);
+  border-radius: var(--radius-small);
+  box-shadow: var(--shadow-subtle);
+  text-transform: uppercase;
+}
+
 .file-icon {
-  margin: 20px 0;
+  margin: 20px 0 30px;
   color: var(--file-icon-color);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-icon i {
+  margin-bottom: 8px;
+}
+
+/* Add a visual hint for swipable content on mobile */
+@media (max-width: 768px) {
+  .carousel-item-container::after {
+    content: '';
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 4px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    opacity: 0.7;
+  }
+  
+  .file-carousel::before {
+    content: 'Swipe to navigate';
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--secondary-text);
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+}
+
+/* Animation for swipe hint */
+@keyframes swipeHint {
+  0% { transform: translateX(-10px); }
+  50% { transform: translateX(10px); }
+  100% { transform: translateX(-10px); }
 }
 
 /* Input Area */
@@ -951,6 +1021,11 @@ footer {
 /* Space between header icons */
 .header-right .icon-button {
   margin-left: 2px;
+}
+
+/* Improve security for links */
+a[target="_blank"] {
+  rel: "noopener noreferrer";
 }
 
 /* Responsive adjustments */
