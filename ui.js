@@ -1,9 +1,17 @@
-// Helper functions
+/**
+ * drpl.co - UI Javascript
+ * Handles user interface interactions, file displays, and user feedback
+ */
+
+// Helper functions for common tasks
 const $ = id => document.getElementById(id);
 const isURL = text => /^((https?:\/\/|www)[^\s]+)/g.test(text.toLowerCase());
 const isDownloadSupported = typeof document.createElement('a').download !== 'undefined';
 
-// UI classes
+/**
+ * Main UI Controller
+ * Central class that manages user interface and events
+ */
 class DrplUI {
     constructor() {
         this.currentPeer = null;
@@ -12,40 +20,56 @@ class DrplUI {
         this.initializeSounds();
     }
 
+    /**
+     * Set up event listeners for peer and file interactions
+     */
     initializeEvents() {
+        // Peer discovery and management events
         Events.on('peer-joined', e => this.onPeerJoined(e.detail));
         Events.on('peer-left', e => this.onPeerLeft(e.detail));
         Events.on('peers', e => this.onPeers(e.detail));
         Events.on('display-name', e => this.onDisplayName(e.detail));
+        Events.on('peer-connection-established', peerId => this.onPeerConnected(peerId));
+        
+        // File transfer events
         Events.on('file-progress', e => this.onFileProgress(e.detail));
         Events.on('file-received', e => this.onFileReceived(e.detail));
+        Events.on('file-transfer-complete', () => this.onFileTransferComplete());
+        Events.on('file-send-start', e => this.handleFileSendStart(e.detail.files, e.detail.to));
+        Events.on('file-receive-start', e => this.handleFileReceiveStart(e.detail.header, e.detail.from));
+        
+        // Text messaging events
         Events.on('text-received', e => this.onTextReceived(e.detail));
+        
+        // UI notification events
         Events.on('notify-user', e => this.showToast(e.detail));
         Events.on('file-sent', () => this.playSentSound());
         Events.on('text-sent', () => this.playSentSound());
-        Events.on('file-transfer-complete', () => this.onFileTransferComplete());
-        Events.on('peer-connection-established', peerId => this.onPeerConnected(peerId));
-        
-        // Add these new event handlers
-        Events.on('file-send-start', e => this.handleFileSendStart(e.detail.files, e.detail.to));
-        Events.on('file-receive-start', e => this.handleFileReceiveStart(e.detail.header, e.detail.from));
     }
 
+    /**
+     * Initialize all dialog components
+     */
     initializeDialogs() {
-        // Initialize dialogs
         this.dialogs = {
             receive: new ReceiveDialog(),
             sendText: new SendTextDialog(),
             receiveText: new ReceiveTextDialog(),
             action: new ActionDialog(),
-            transferProgress: new TransferProgressDialog() // Add new progress dialog
+            transferProgress: new TransferProgressDialog()
         };
     }
 
+    /**
+     * Initialize sound effects for user feedback
+     */
     initializeSounds() {
         this.sentSound = $('sent-sound');
     }
 
+    /**
+     * Play sound effect when an item is sent
+     */
     playSentSound() {
         if (this.sentSound) {
             this.sentSound.currentTime = 0;
@@ -53,16 +77,28 @@ class DrplUI {
         }
     }
 
+    /**
+     * Handle when a new peer joins the network
+     * @param {Object} peer - Peer information
+     */
     onPeerJoined(peer) {
         if ($(peer.id)) return; // Peer already exists
         this.createPeerElement(peer);
     }
 
+    /**
+     * Handle multiple peers being discovered
+     * @param {Array} peers - List of peers
+     */
     onPeers(peers) {
         this.clearPeers();
         peers.forEach(peer => this.onPeerJoined(peer));
     }
 
+    /**
+     * Handle when a peer leaves the network
+     * @param {string} peerId - ID of the departing peer
+     */
     onPeerLeft(peerId) {
         const peerElement = $(peerId);
         if (peerElement) {
@@ -70,6 +106,10 @@ class DrplUI {
         }
     }
 
+    /**
+     * Handle successful connection to a peer
+     * @param {string} peerId - ID of the connected peer
+     */
     onPeerConnected(peerId) {
         const peerElement = $(peerId);
         if (peerElement) {
@@ -77,6 +117,10 @@ class DrplUI {
         }
     }
 
+    /**
+     * Update display name information
+     * @param {Object} data - Display name data
+     */
     onDisplayName(data) {
         const displayNameElement = $('display-name');
         
@@ -93,6 +137,10 @@ class DrplUI {
         displayNameElement.appendChild(nameSpan);
     }
 
+    /**
+     * Update progress indicators during file transfer
+     * @param {Object} progress - Progress data
+     */
     onFileProgress(progress) {
         const peerId = progress.sender;
         const peerElement = $(peerId);
@@ -105,6 +153,10 @@ class DrplUI {
         this.dialogs.transferProgress.updateProgress(peerId, progress.progress, progress.bytesTransferred);
     }
 
+    /**
+     * Handle a completed file reception
+     * @param {Object} file - The received file
+     */
     onFileReceived(file) {
         // Add the file to the receive dialog
         this.dialogs.receive.addFile(file);
@@ -113,8 +165,10 @@ class DrplUI {
         this.dialogs.transferProgress.endTransfer(file.sender);
     }
 
+    /**
+     * Handle when a file transfer completes
+     */
     onFileTransferComplete() {
-        // File transfer completed, update UI if needed
         console.log("File transfer completed");
         
         // Ensure the progress dialog is properly updated or hidden
@@ -123,10 +177,18 @@ class DrplUI {
         }, 500);
     }
 
+    /**
+     * Handle received text messages
+     * @param {Object} message - The received message
+     */
     onTextReceived(message) {
         this.dialogs.receiveText.showText(message.text, message.sender);
     }
 
+    /**
+     * Display a toast notification to the user
+     * @param {string} message - Message to display
+     */
     showToast(message) {
         const toast = $('toast');
         toast.textContent = message;
@@ -137,10 +199,17 @@ class DrplUI {
         }, 3000);
     }
 
+    /**
+     * Clear all peers from the display
+     */
     clearPeers() {
         $('peers').innerHTML = '';
     }
 
+    /**
+     * Create and display a peer element
+     * @param {Object} peer - Peer data 
+     */
     createPeerElement(peer) {
         const peerElement = document.createElement('div');
         peerElement.className = 'peer';
@@ -166,12 +235,22 @@ class DrplUI {
         $('peers').appendChild(peerElement);
     }
 
+    /**
+     * Determine device type from peer information
+     * @param {Object} name - Peer name information
+     * @returns {string} Device type
+     */
     getDeviceType(name) {
         if (name.type === 'mobile') return 'mobile';
         if (name.type === 'tablet') return 'tablet';
         return 'desktop';
     }
 
+    /**
+     * Get appropriate icon for device type
+     * @param {string} type - Device type
+     * @returns {string} FontAwesome icon class
+     */
     getDeviceIcon(type) {
         switch (type) {
             case 'mobile':
@@ -183,6 +262,11 @@ class DrplUI {
         }
     }
 
+    /**
+     * Update progress indicator on peer element
+     * @param {Element} peerElement - DOM element for the peer
+     * @param {number} progress - Progress value (0-1)
+     */
     setPeerProgress(peerElement, progress) {
         if (progress > 0) {
             peerElement.setAttribute('transfer', 'true');
@@ -202,7 +286,11 @@ class DrplUI {
         }
     }
 
-    // Handle transfer start events
+    /**
+     * Handle initiation of file sending
+     * @param {Array} files - Files to send
+     * @param {string} peerId - Target peer ID
+     */
     handleFileSendStart(files, peerId) {
         // Start the transfer progress dialog
         this.dialogs.transferProgress.startTransfer(
@@ -213,6 +301,11 @@ class DrplUI {
         );
     }
 
+    /**
+     * Handle start of file reception
+     * @param {Object} fileHeader - File metadata
+     * @param {string} peerId - Source peer ID
+     */
     handleFileReceiveStart(fileHeader, peerId) {
         // Start the transfer progress dialog for receiving
         this.dialogs.transferProgress.startReceiving(
@@ -223,13 +316,22 @@ class DrplUI {
     }
 }
 
-// Dialog classes
+/**
+ * Base Dialog Class
+ * Parent class for all modal dialogs
+ */
 class Dialog {
+    /**
+     * @param {string} id - DOM ID of the dialog
+     */
     constructor(id) {
         this.element = $(id);
         this.setupCloseButtons();
     }
 
+    /**
+     * Set up event listeners for close buttons
+     */
     setupCloseButtons() {
         const closeButtons = this.element.querySelectorAll('[id^="close-"]');
         closeButtons.forEach(button => {
@@ -237,29 +339,41 @@ class Dialog {
         });
     }
 
+    /**
+     * Show the dialog
+     */
     show() {
         this.element.classList.add('active');
     }
 
+    /**
+     * Hide the dialog
+     */
     hide() {
         this.element.classList.remove('active');
     }
 }
 
-// Enhanced ReceiveDialog with carousel and multi-file support
+/**
+ * ReceiveDialog - Enhanced dialog for displaying received files
+ * Features carousel navigation and file previews
+ */
 class ReceiveDialog extends Dialog {
     constructor() {
         super('receive-dialog');
         this.files = [];
         this.currentIndex = 0;
         this.objectUrls = {}; // Store URLs to prevent memory leaks
-        this.isTransitioning = false; // Add a flag to prevent rapid clicking
+        this.isTransitioning = false; // Flag to prevent rapid clicking
         this._setupCarousel();
         this._setupDownloadButtons();
         this._setupKeyboardNavigation();
         this._setupTouchNavigation();
     }
 
+    /**
+     * Set up carousel navigation controls
+     */
     _setupCarousel() {
         // Navigation buttons - using direct DOM event attachment
         const prevButton = $('carousel-prev');
@@ -303,6 +417,9 @@ class ReceiveDialog extends Dialog {
         this.carouselContainer = this.element.querySelector('.carousel-item-container');
     }
 
+    /**
+     * Set up download buttons
+     */
     _setupDownloadButtons() {
         // Current file download
         $('download-current').addEventListener('click', (e) => {
@@ -323,6 +440,9 @@ class ReceiveDialog extends Dialog {
         });
     }
     
+    /**
+     * Set up keyboard navigation
+     */
     _setupKeyboardNavigation() {
         // Add keyboard navigation support
         this._keyHandler = (e) => {
@@ -348,6 +468,9 @@ class ReceiveDialog extends Dialog {
         document.addEventListener('keydown', this._keyHandler, true); // Use capture phase
     }
     
+    /**
+     * Set up touch navigation for mobile devices
+     */
     _setupTouchNavigation() {
         // Add touch navigation support for mobile devices
         let startX, startY;
@@ -421,7 +544,10 @@ class ReceiveDialog extends Dialog {
         }, { passive: false }); // Need passive: false to be able to preventDefault
     }
 
-    // Add a file to the carousel
+    /**
+     * Add a file to the carousel
+     * @param {Object} file - File to add
+     */
     addFile(file) {
         // Add to files array
         this.files.push(file);
@@ -450,7 +576,9 @@ class ReceiveDialog extends Dialog {
         }
     }
     
-    // Show the file at the current index
+    /**
+     * Display the currently selected file
+     */
     displayCurrentFile() {
         if (this.files.length === 0) return;
         
@@ -536,7 +664,10 @@ class ReceiveDialog extends Dialog {
         }, 150); // Slight delay to allow fade-out animation
     }
     
-    // Show the next file in the carousel
+    /**
+     * Navigate to the next file
+     * @returns {boolean} True if navigation was successful
+     */
     showNextFile() {
         if (this.isTransitioning) return false;
         
@@ -548,7 +679,10 @@ class ReceiveDialog extends Dialog {
         return false;
     }
     
-    // Show the previous file in the carousel
+    /**
+     * Navigate to the previous file
+     * @returns {boolean} True if navigation was successful
+     */
     showPreviousFile() {
         if (this.isTransitioning) return false;
         
@@ -560,7 +694,9 @@ class ReceiveDialog extends Dialog {
         return false;
     }
     
-    // Update file counter display
+    /**
+     * Update the file counter display
+     */
     _updateFileCounter() {
         const currentElement = $('current-file');
         const totalElement = $('total-files');
@@ -571,7 +707,9 @@ class ReceiveDialog extends Dialog {
         }
     }
     
-    // Update navigation button states
+    /**
+     * Update navigation button states
+     */
     _updateNavButtons() {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
@@ -596,7 +734,11 @@ class ReceiveDialog extends Dialog {
         }
     }
     
-    // Get appropriate icon class based on file type
+    /**
+     * Get appropriate icon class based on file type
+     * @param {string} mimeType - MIME type of the file
+     * @returns {string} FontAwesome icon class
+     */
     _getFileIconClass(mimeType) {
         if (mimeType.startsWith('image/')) {
             return 'fas fa-file-image fa-4x';
@@ -621,7 +763,10 @@ class ReceiveDialog extends Dialog {
         }
     }
     
-    // Download a single file
+    /**
+     * Download a single file
+     * @param {Object} file - File to download
+     */
     downloadFile(file) {
         let url = this.objectUrls[file.name];
         if (!url) {
@@ -639,7 +784,9 @@ class ReceiveDialog extends Dialog {
         // Don't revoke URL here, as we might need it again
     }
     
-    // Download all files as a ZIP
+    /**
+     * Download all files as a ZIP archive
+     */
     async downloadAllFiles() {
         if (!window.JSZip) {
             Events.fire('notify-user', 'ZIP functionality not available');
@@ -683,6 +830,11 @@ class ReceiveDialog extends Dialog {
         }
     }
     
+    /**
+     * Format file size for display
+     * @param {number} bytes - Size in bytes
+     * @returns {string} Formatted size string
+     */
     _formatFileSize(bytes) {
         if (bytes >= 1e9) {
             return (Math.round(bytes / 1e8) / 10) + ' GB';
@@ -695,7 +847,9 @@ class ReceiveDialog extends Dialog {
         }
     }
     
-    // Reset the dialog when hiding
+    /**
+     * Override hide method to prevent hiding during transitions
+     */
     hide() {
         // Only allow hiding if not in transition
         if (this.isTransitioning) return;
@@ -703,7 +857,9 @@ class ReceiveDialog extends Dialog {
         super.hide();
     }
     
-    // Override show to ensure we're not in transition
+    /**
+     * Override show method to ensure we're not in transition
+     */
     show() {
         this.isTransitioning = false;
         super.show();
@@ -712,7 +868,9 @@ class ReceiveDialog extends Dialog {
         this._updateNavButtons();
     }
     
-    // Clear all files (called when needed)
+    /**
+     * Clear all files (used when resetting the dialog)
+     */
     clearFiles() {
         // Revoke all object URLs first to prevent memory leaks
         Object.values(this.objectUrls).forEach(url => {
@@ -728,7 +886,9 @@ class ReceiveDialog extends Dialog {
         this.carouselContainer.innerHTML = '';
     }
     
-    // Clean up resources when the component is destroyed
+    /**
+     * Clean up resources when the component is destroyed
+     */
     destroy() {
         // Remove event listeners
         document.removeEventListener('keydown', this._keyHandler, true);
@@ -740,12 +900,18 @@ class ReceiveDialog extends Dialog {
     }
 }
 
+/**
+ * SendTextDialog - Dialog for sending text messages
+ */
 class SendTextDialog extends Dialog {
     constructor() {
         super('send-text-dialog');
         this.setupSendButton();
     }
 
+    /**
+     * Set up the send button and keyboard shortcuts
+     */
     setupSendButton() {
         $('send-text-button').addEventListener('click', () => {
             const text = $('text-input').textContent;
@@ -773,6 +939,10 @@ class SendTextDialog extends Dialog {
         });
     }
 
+    /**
+     * Show the dialog for a specific peer
+     * @param {string} peerId - Target peer ID
+     */
     show(peerId) {
         this.peerId = peerId;
         super.show();
@@ -780,7 +950,9 @@ class SendTextDialog extends Dialog {
     }
 }
 
-// Enhanced ReceiveTextDialog with reply functionality
+/**
+ * ReceiveTextDialog - Dialog for displaying received messages with reply option
+ */
 class ReceiveTextDialog extends Dialog {
     constructor() {
         super('receive-text-dialog');
@@ -788,12 +960,18 @@ class ReceiveTextDialog extends Dialog {
         this.setupReplyButton();
     }
 
+    /**
+     * Set up the copy to clipboard button
+     */
     setupCopyButton() {
         $('copy-text').addEventListener('click', () => {
             this.copyText();
         });
     }
 
+    /**
+     * Set up the reply button and keyboard shortcuts
+     */
     setupReplyButton() {
         $('reply-button').addEventListener('click', () => {
             this.sendReply();
@@ -809,6 +987,11 @@ class ReceiveTextDialog extends Dialog {
         });
     }
 
+    /**
+     * Display received text message
+     * @param {string} text - Message text
+     * @param {string} senderId - ID of the sender
+     */
     showText(text, senderId) {
         const textElement = $('received-text');
         textElement.innerHTML = '';
@@ -838,6 +1021,9 @@ class ReceiveTextDialog extends Dialog {
         setTimeout(() => $('reply-input').focus(), 300);
     }
 
+    /**
+     * Send a reply to the received message
+     */
     sendReply() {
         const reply = $('reply-input').textContent.trim();
         if (!reply || !this.currentSender) return;
@@ -861,6 +1047,9 @@ class ReceiveTextDialog extends Dialog {
         this.hide();
     }
 
+    /**
+     * Copy text to clipboard
+     */
     copyText() {
         if (!navigator.clipboard) {
             this.legacyCopy();
@@ -872,6 +1061,9 @@ class ReceiveTextDialog extends Dialog {
             .catch(err => console.error('Could not copy text:', err));
     }
 
+    /**
+     * Fallback copy method for browsers without clipboard API
+     */
     legacyCopy() {
         const textArea = document.createElement('textarea');
         textArea.value = this.text;
@@ -891,12 +1083,18 @@ class ReceiveTextDialog extends Dialog {
     }
 }
 
+/**
+ * ActionDialog - Dialog for selecting actions to perform with a peer
+ */
 class ActionDialog extends Dialog {
     constructor() {
         super('action-dialog');
         this.setupActionButtons();
     }
 
+    /**
+     * Set up action buttons for sending files and messages
+     */
     setupActionButtons() {
         $('send-file-button').addEventListener('click', () => {
             this.hide();
@@ -925,17 +1123,26 @@ class ActionDialog extends Dialog {
         });
     }
 
+    /**
+     * Show the dialog with peer name
+     * @param {string} peerName - Name of the peer
+     */
     show(peerName) {
         $('action-title').textContent = `Connect with ${peerName}`;
         super.show();
     }
 
+    /**
+     * Trigger file selection dialog
+     */
     selectFiles() {
         $('file-input').click();
     }
 }
 
-// Updated Transfer Progress Dialog with close button and improved closing behavior
+/**
+ * TransferProgressDialog - Dialog for displaying file transfer progress
+ */
 class TransferProgressDialog extends Dialog {
     constructor() {
         super('transfer-progress-dialog');
@@ -947,6 +1154,9 @@ class TransferProgressDialog extends Dialog {
         this.setupManualClose();
     }
     
+    /**
+     * Set up escape key to close dialog
+     */
     setupEscapeKey() {
         // Add keyboard Escape key support
         this._keyHandler = (e) => {
@@ -962,6 +1172,9 @@ class TransferProgressDialog extends Dialog {
         window.addEventListener('keydown', this._keyHandler);
     }
     
+    /**
+     * Set up manual close button
+     */
     setupManualClose() {
         // Add event listener to the close button
         const closeButton = $('close-transfer');
@@ -972,6 +1185,9 @@ class TransferProgressDialog extends Dialog {
         }
     }
     
+    /**
+     * Reset transfer state
+     */
     reset() {
         this.totalFiles = 0;
         this.currentFile = 0;
@@ -979,6 +1195,13 @@ class TransferProgressDialog extends Dialog {
         this.progress = 0;
     }
     
+    /**
+     * Initialize dialog for sending files
+     * @param {string} peerId - Target peer ID
+     * @param {string} fileName - File name
+     * @param {number} fileCount - Number of files
+     * @param {number} fileSize - Size of first file
+     */
     startTransfer(peerId, fileName, fileCount = 1, fileSize = 0) {
         this.activeTransfers[peerId] = {
             totalFiles: fileCount,
@@ -999,6 +1222,12 @@ class TransferProgressDialog extends Dialog {
         this.show();
     }
     
+    /**
+     * Initialize dialog for receiving files
+     * @param {string} peerId - Source peer ID
+     * @param {string} fileName - File name
+     * @param {number} fileSize - File size
+     */
     startReceiving(peerId, fileName, fileSize = 0) {
         this.activeTransfers[peerId] = {
             totalFiles: 1, // We might not know the total count yet
@@ -1020,6 +1249,12 @@ class TransferProgressDialog extends Dialog {
         this.show();
     }
     
+    /**
+     * Update progress for an active transfer
+     * @param {string} peerId - Peer ID
+     * @param {number} progress - Progress (0-1)
+     * @param {number} bytesTransferred - Bytes transferred
+     */
     updateProgress(peerId, progress, bytesTransferred = 0) {
         if (!this.activeTransfers[peerId]) return;
         
@@ -1056,6 +1291,9 @@ class TransferProgressDialog extends Dialog {
         }
     }
     
+    /**
+     * Check if all transfers are complete and hide dialog if so
+     */
     checkAndHideIfDone() {
         // Check if all active transfers are completed
         const allCompleted = Object.values(this.activeTransfers).every(transfer => 
@@ -1071,6 +1309,11 @@ class TransferProgressDialog extends Dialog {
         }
     }
     
+    /**
+     * Move to next file in multi-file transfer
+     * @param {string} peerId - Peer ID
+     * @param {string} fileName - Name of next file
+     */
     nextFile(peerId, fileName) {
         if (!this.activeTransfers[peerId]) return;
         
@@ -1084,6 +1327,10 @@ class TransferProgressDialog extends Dialog {
         this.updateUI(peerId);
     }
     
+    /**
+     * Update UI elements with current transfer state
+     * @param {string} peerId - Peer ID
+     */
     updateUI(peerId) {
         const transfer = this.activeTransfers[peerId];
         if (!transfer) return;
@@ -1101,6 +1348,11 @@ class TransferProgressDialog extends Dialog {
         }
     }
     
+    /**
+     * Format transfer speed for display
+     * @param {number} bytesPerSecond - Transfer speed
+     * @returns {string} Formatted speed string
+     */
     _formatSpeed(bytesPerSecond) {
         if (bytesPerSecond >= 1e6) {
             return (Math.round(bytesPerSecond / 1e5) / 10) + ' MB/s';
@@ -1111,6 +1363,10 @@ class TransferProgressDialog extends Dialog {
         }
     }
     
+    /**
+     * Mark a transfer as complete
+     * @param {string} peerId - Peer ID 
+     */
     endTransfer(peerId) {
         if (!this.activeTransfers[peerId]) return;
         
@@ -1125,7 +1381,9 @@ class TransferProgressDialog extends Dialog {
         this.checkAndHideIfDone();
     }
     
-    // Override the hide method to ensure we clean up properly
+    /**
+     * Override hide method to ensure clean-up
+     */
     hide() {
         super.hide();
         // Clean up on hide
@@ -1134,14 +1392,16 @@ class TransferProgressDialog extends Dialog {
         }, 300);
     }
     
-    // Clean up resources when the component is destroyed
+    /**
+     * Clean up resources
+     */
     destroy() {
         // Remove event listeners
         window.removeEventListener('keydown', this._keyHandler);
     }
 }
 
-// Initialize the UI
+// Initialize the UI when the DOM is fully loaded
 let drplUI;
 document.addEventListener('DOMContentLoaded', () => {
     drplUI = new DrplUI();

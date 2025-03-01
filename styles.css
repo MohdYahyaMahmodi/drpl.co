@@ -1,43 +1,59 @@
-/* Base Styles */
+/**
+ * drpl.co - Main Stylesheet
+ * Cross-platform file sharing web application
+ */
+
+/* ===== CSS Variables - Light Theme ===== */
 :root {
-  --icon-size: 24px;
+  /* Colors */
   --primary-color: #111111;
   --bg-color: #fff;
   --accent-color: #007bff;
   --border-color: #e0e0e0;
-  --peer-size: 110px;
-  --animation-color: rgba(0, 0, 0, 0.05);
-  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.05);
-  --shadow-medium: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --radius-small: 8px;
-  --radius-medium: 12px;
-  --radius-large: 16px;
   --text-color: #333333;
   --secondary-text: #666666;
+  --peer-icon-color: #5e94ff;
+  
+  /* UI Elements */
   --dialog-bg: white;
   --toast-bg: #333;
   --toast-color: white;
   --button-bg: #f0f0f0;
   --button-text: #333;
-  --peer-icon-color: #5e94ff;
   --received-text-bg: #f9f9f9;
   --preview-bg: #f9f9f9;
-  --transition-speed: 0.3s;
-  --about-bg-color: rgba(255, 255, 255, 0.95);
-  --no-peers-bg: rgba(255, 255, 255, 0.8);
-  --display-name-bg: rgba(255, 255, 255, 0.8);
   --icon-button-bg: rgba(233, 233, 233, 0.8);
   --icon-button-hover-bg: rgb(184, 184, 184);
   --carousel-nav-bg: #f5f5f5;
   --carousel-nav-hover-bg: #e5e5e5;
+  --progress-circle-bg: white;
+  
+  /* About Panel */
+  --about-bg-color: rgba(255, 255, 255, 0.95);
+  --about-tagline-color: #555;
+  --about-step-color: #444;
+  --about-footer-color: #777;
+  --close-icon-color: #555;
+  
+  /* Status Indicators */
+  --no-peers-bg: rgba(255, 255, 255, 0.8);
+  --display-name-bg: rgba(255, 255, 255, 0.8);
   --header-text-color: #333;
   --file-icon-color: #555;
   --file-size-color: #666;
-  --about-footer-color: #777;
-  --about-tagline-color: #555;
-  --close-icon-color: #555;
-  --about-step-color: #444;
-  --progress-circle-bg: white;
+  
+  /* Measurements */
+  --icon-size: 24px;
+  --peer-size: 110px;
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  --transition-speed: 0.3s;
+  
+  /* Shadows */
+  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.05);
+  --shadow-medium: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --animation-color: rgba(0, 0, 0, 0.05);
   
   /* Action Button Variables */
   --action-button-bg: #5e94ff;
@@ -46,7 +62,7 @@
   --action-button-shadow: 0 4px 12px rgba(94, 148, 255, 0.25);
   --action-button-hover-shadow: 0 6px 16px rgba(94, 148, 255, 0.35);
   
-  /* Modal Button Variables */
+  /* Dialog Button Variables */
   --send-button-bg: #5e94ff;
   --send-button-hover-bg: #4a7ad6;
   --send-button-text: white;
@@ -61,50 +77,58 @@
   --cancel-button-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* ===== Dark Theme ===== */
 [data-theme="dark"] {
+  /* Colors */
   --primary-color: #f0f0f0;
   --bg-color: #121212;
   --border-color: #404040;
-  --animation-color: rgba(255, 255, 255, 0.05);
-  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.2);
-  --shadow-medium: 0 4px 24px rgba(0, 0, 0, 0.3);
   --text-color: #f0f0f0;
   --secondary-text: #aaaaaa;
+  --peer-icon-color: #4a7ad6;
+  
+  /* UI Elements */
   --dialog-bg: #1e1e1e;
   --toast-bg: #f0f0f0;
   --toast-color: #121212;
   --button-bg: #333333;
   --button-text: #f0f0f0;
-  --peer-icon-color: #4a7ad6;
   --received-text-bg: #272727;
   --preview-bg: #272727;
-  --about-bg-color: rgba(18, 18, 18, 0.95);
-  --no-peers-bg: rgba(18, 18, 18, 0.8);
-  --display-name-bg: rgba(18, 18, 18, 0.8);
   --icon-button-bg: rgba(37, 37, 37, 0.8);
   --icon-button-hover-bg: rgb(24, 24, 24);
   --carousel-nav-bg: #333333;
   --carousel-nav-hover-bg: #444444;
+  --progress-circle-bg: #1e1e1e;
+  
+  /* About Panel */
+  --about-bg-color: rgba(18, 18, 18, 0.95);
+  --about-tagline-color: #cccccc;
+  --about-step-color: #cccccc;
+  --about-footer-color: #999999;
+  --close-icon-color: #aaaaaa;
+  
+  /* Status Indicators */
+  --no-peers-bg: rgba(18, 18, 18, 0.8);
+  --display-name-bg: rgba(18, 18, 18, 0.8);
   --header-text-color: #f0f0f0;
   --file-icon-color: #aaaaaa;
   --file-size-color: #aaaaaa;
-  --about-footer-color: #999999;
-  --about-tagline-color: #cccccc;
-  --close-icon-color: #aaaaaa;
-  --about-step-color: #cccccc;
-  --progress-circle-bg: #1e1e1e;
+  
+  /* Shadows */
+  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.2);
+  --shadow-medium: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --animation-color: rgba(255, 255, 255, 0.05);
   
   /* Action Button Variables for Dark Mode */
   --action-button-bg: #4a7ad6;
   --action-button-hover-bg: #3a67bd;
-  --action-button-text: white;
   --action-button-shadow: 0 4px 12px rgba(74, 122, 214, 0.25);
   --action-button-hover-shadow: 0 6px 16px rgba(74, 122, 214, 0.35);
   
-  /* Modal Button Variables for Dark Mode */
+  /* Dialog Button Variables for Dark Mode */
   --send-button-bg: #4a7ad6;
   --send-button-hover-bg: #3a67bd;
-  --send-button-text: white;
   --send-button-shadow: 0 4px 12px rgba(74, 122, 214, 0.15);
   --send-button-hover-shadow: 0 6px 16px rgba(74, 122, 214, 0.25);
   
@@ -116,11 +140,15 @@
   --cancel-button-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* ===== Base Styles ===== */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  transition: background-color var(--transition-speed), color var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+  transition: background-color var(--transition-speed), 
+              color var(--transition-speed), 
+              border-color var(--transition-speed), 
+              box-shadow var(--transition-speed);
 }
 
 html, body {
@@ -134,19 +162,15 @@ html, body {
   background-color: var(--bg-color);
 }
 
-/* Canvas Styles */
-#background-canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
-  display: block;
+a {
+  text-decoration: none;
 }
 
-/* Layout */
+a[target="_blank"] {
+  rel: "noopener noreferrer";
+}
+
+/* ===== Layout ===== */
 .center {
   display: flex;
   align-items: center;
@@ -170,13 +194,12 @@ header {
   gap: 12px;
 }
 
-#peers-container {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  padding: 20px;
-  position: relative;
-  z-index: 1;
+.header-right .icon-button {
+  margin-left: 2px;
+}
+
+#theme-toggle {
+  margin-right: 2px;
 }
 
 footer {
@@ -189,7 +212,19 @@ footer {
   z-index: 1;
 }
 
-/* Buttons */
+/* ===== Background Canvas ===== */
+#background-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* ===== Buttons ===== */
 .icon-button {
   width: 40px;
   height: 40px;
@@ -200,7 +235,7 @@ footer {
   cursor: pointer;
   color: var(--text-color);
   transition: background-color 0.2s, transform 0.2s, color var(--transition-speed);
-  text-decoration: none; /* Remove underline */
+  text-decoration: none;
   background-color: var(--icon-button-bg);
   box-shadow: var(--shadow-subtle);
   border: none;
@@ -210,7 +245,6 @@ footer {
   background-color: var(--icon-button-hover-bg);
   transform: scale(1.05);
 }
-
 
 .button {
   padding: 10px 18px;
@@ -256,7 +290,14 @@ footer {
   box-shadow: none;
 }
 
-/* CSS selector to target primary action buttons in dialogs */
+/* Dialog button styling */
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  gap: 12px;
+}
+
 .dialog-buttons .button:not(.secondary) {
   background-color: var(--send-button-bg) !important;
   color: var(--send-button-text) !important;
@@ -269,7 +310,6 @@ footer {
   transform: translateY(-2px);
 }
 
-/* CSS selector to target secondary action buttons in dialogs */
 .dialog-buttons .button.secondary {
   background-color: var(--cancel-button-bg) !important;
   color: var(--cancel-button-text) !important;
@@ -283,9 +323,17 @@ footer {
   transform: translateY(-2px);
 }
 
-/* Make sure icons within dialog buttons have proper color */
 .dialog-buttons .button i {
   color: inherit;
+}
+
+/* Action buttons */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+  gap: 12px;
 }
 
 .action-button {
@@ -297,8 +345,8 @@ footer {
   justify-content: center;
   border-radius: var(--radius-small);
   transition: all 0.2s;
-  background-color: var(--action-button-bg) !important; /* Override .button background */
-  color: var(--action-button-text) !important; /* Override .button color */
+  background-color: var(--action-button-bg) !important;
+  color: var(--action-button-text) !important;
   box-shadow: var(--action-button-shadow);
 }
 
@@ -314,14 +362,21 @@ footer {
   color: var(--action-button-text);
 }
 
-.dialog-buttons {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 24px;
-  gap: 12px;
+.carousel-actions {
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-/* Peers */
+/* ===== Peers Display ===== */
+#peers-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
 #peers {
   display: flex;
   flex-wrap: wrap;
@@ -339,11 +394,11 @@ footer {
   justify-content: center;
   cursor: pointer;
   position: relative;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .peer:hover {
-  transform: translateY(-2px);
+  transform: translateY(-5px);
 }
 
 .peer:hover .peer-icon {
@@ -392,7 +447,11 @@ footer {
   color: var(--secondary-text);
 }
 
-/* Improved progress circle for both light and dark mode */
+.peer.connected .peer-icon {
+  box-shadow: 0 0 0 3px var(--accent-color);
+}
+
+/* Progress Circle */
 .progress-circle {
   position: absolute;
   top: 10px;
@@ -417,7 +476,6 @@ footer {
   background: var(--progress-circle-bg);
 }
 
-/* Add a mini progress indicator inside the circle */
 .progress-circle::after {
   content: attr(data-progress) '%';
   position: absolute;
@@ -431,14 +489,14 @@ footer {
   font-size: 12px;
   font-weight: bold;
   color: var(--text-color);
-  transform: rotate(90deg); /* Counter the parent's rotation */
+  transform: rotate(90deg);
 }
 
 .peer[transfer] .progress-circle {
   opacity: 1;
 }
 
-/* No Peers Message */
+/* ===== No Peers Message ===== */
 #no-peers {
   display: none;
   text-align: center;
@@ -446,7 +504,6 @@ footer {
   padding: 30px;
   background-color: var(--no-peers-bg);
   border-radius: var(--radius-medium);
-
 }
 
 #no-peers h2 {
@@ -467,7 +524,27 @@ footer {
   display: block;
 }
 
-/* Dialog */
+/* ===== Display Name ===== */
+#display-name {
+  font-size: 16px;
+  font-weight: 500;
+  background-color: var(--display-name-bg);
+  padding: 10px 16px;
+  border-radius: var(--radius-small);
+  box-shadow: var(--shadow-subtle);
+  color: var(--text-color);
+}
+
+#display-name span {
+  background-color: var(--peer-icon-color);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* ===== Dialog Structure ===== */
 .dialog {
   display: none;
   position: fixed;
@@ -503,17 +580,8 @@ footer {
   overflow-y: auto;
   box-shadow: var(--shadow-medium);
   animation: dialog-appear 0.3s ease-out;
-}
-
-@keyframes dialog-appear {
-  from { 
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to { 
-    opacity: 1;
-    transform: scale(1);
-  }
+  touch-action: pan-y;
+  position: relative;
 }
 
 .dialog h3 {
@@ -524,17 +592,131 @@ footer {
   line-height: 1.5;
 }
 
+/* ===== Text Input ===== */
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-small);
+  padding: 16px;
+  margin: 16px 0;
+  outline: none;
+  resize: none;
+  overflow: auto;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.textarea:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.textarea[placeholder]:empty:before {
+  content: attr(placeholder);
+  color: var(--secondary-text);
+}
+
+/* ===== Message Dialog ===== */
+.message-container {
+  margin-bottom: 16px;
+}
+
+.received-text {
+  width: 100%;
+  min-height: 60px;
+  max-height: 200px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-small);
+  padding: 16px;
+  margin: 10px 0;
+  overflow: auto;
+  word-break: break-word;
+  line-height: 1.5;
+  background-color: var(--received-text-bg);
+  color: var(--text-color);
+}
+
+.reply-container {
+  margin-top: 15px;
+}
+
+#reply-input {
+  min-height: 80px;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+}
+
+/* ===== File Carousel ===== */
+.file-carousel {
+  margin: 20px 0;
+  position: relative;
+}
+
 .file-info {
   text-align: center;
   max-width: 90%;
   margin: 0 auto 16px auto;
+  transition: all 0.3s ease;
 }
 
-/* File Carousel */
-.file-carousel {
-  margin: 20px 0;
+.file-name {
+  font-weight: 500;
+  margin-bottom: 6px;
+  word-break: break-all;
+  font-size: 16px;
+  color: var(--text-color);
 }
 
+.file-size {
+  font-size: 14px;
+  color: var(--file-size-color);
+}
+
+/* Carousel Container */
+.carousel-item-container {
+  position: relative;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+  user-select: none;
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.carousel-item-container.fade-out {
+  opacity: 0;
+}
+
+.carousel-item-container.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.carousel-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  opacity: 1;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.carousel-item a, 
+.carousel-item img,
+.carousel-item .preview,
+.carousel-item .file-info {
+  pointer-events: auto;
+}
+
+/* Carousel Navigation */
 .carousel-navigation {
   display: flex;
   align-items: center;
@@ -546,8 +728,8 @@ footer {
 }
 
 .carousel-nav-button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -558,71 +740,58 @@ footer {
   color: var(--text-color);
   transition: background-color 0.2s, transform 0.2s, opacity 0.2s;
   position: relative;
-  z-index: 5;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  z-index: 30;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 0 10px;
+  user-select: none;
 }
-
 
 .carousel-nav-button:hover:not(.disabled) {
   background-color: var(--carousel-nav-hover-bg);
   transform: scale(1.1);
 }
 
-.carousel-nav-button.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
+.carousel-nav-button:active {
+  transform: scale(0.95);
 }
 
-.carousel-counter {
-  padding: 5px 10px;
-  background-color: var(--carousel-nav-bg);
-  border-radius: 12px;
-  font-weight: 500;
-  min-width: 60px;
-  text-align: center;
+.carousel-nav-button:focus {
+  outline: none;
 }
 
-/* Completely removes the native disabled attribute styling */
+.carousel-nav-button.disabled,
 .carousel-nav-button:disabled {
   opacity: 0.4;
+  cursor: not-allowed !important;
+  pointer-events: all !important;
+  transform: none;
   background-color: var(--carousel-nav-bg) !important;
   color: var(--text-color) !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
   border: none !important;
   box-shadow: none !important;
 }
 
-/* Improve carousel usability */
-.carousel-item-container {
-  min-height: 200px;
-  position: relative;
+.carousel-counter {
+  padding: 5px 14px;
+  background-color: var(--carousel-nav-bg);
+  border-radius: 16px;
+  font-weight: 500;
+  min-width: 70px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+/* File Preview */
+.preview {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s ease;
-  user-select: none;
-  pointer-events: none;
+  padding: 16px;
+  background-color: var(--preview-bg);
+  border-radius: var(--radius-small);
+  margin: 16px 0;
+  transition: all 0.3s ease;
 }
-
-.carousel-nav-button:not(.disabled):hover {
-  background-color: var(--carousel-nav-hover-bg);
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.carousel-item-container:active {
-  cursor: grabbing;
-}
-
-.carousel-item {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
 
 .carousel-image {
   max-width: 100%;
@@ -630,10 +799,14 @@ footer {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: var(--shadow-subtle);
+  transition: transform 0.3s ease;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.peer.connected .peer-icon {
-  box-shadow: 0 0 0 3px var(--accent-color);
+.carousel-image:hover {
+  transform: scale(1.02);
 }
 
 /* File Type Display */
@@ -671,130 +844,84 @@ footer {
   margin-bottom: 8px;
 }
 
-/* Add a visual hint for swipable content on mobile */
-@media (max-width: 768px) {
-  .carousel-item-container::after {
-    content: '';
-    position: absolute;
-    bottom: -15px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 50px;
-    height: 4px;
-    background-color: var(--border-color);
-    border-radius: 2px;
-    opacity: 0;
-  }
-  
-  .file-carousel::before {
-    content: 'Swipe to navigate';
-    display: block;
-    text-align: center;
-    font-size: 12px;
-    color: var(--secondary-text);
-    margin-bottom: 10px;
-    opacity: 0.8;
-  }
+/* ===== Transfer Progress Dialog ===== */
+.transfer-progress-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+  text-align: center;
 }
 
-/* Animation for swipe hint */
-@keyframes swipeHint {
-  0% { transform: translateX(-10px); }
-  50% { transform: translateX(10px); }
-  100% { transform: translateX(-10px); }
-}
-
-/* Input Area */
-.textarea {
-  width: 100%;
-  min-height: 120px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-small);
-  padding: 16px;
-  margin: 16px 0;
-  outline: none;
-  resize: none;
-  overflow: auto;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.5;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  background-color: var(--bg-color);
-  color: var(--text-color);
-}
-
-.textarea:focus {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
-}
-
-.textarea[placeholder]:empty:before {
-  content: attr(placeholder);
-  color: var(--secondary-text);
-}
-
-/* Message and Reply Styling */
-.message-container {
-  margin-bottom: 16px;
-}
-
-.received-text {
-  width: 100%;
-  min-height: 60px;
-  max-height: 200px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-small);
-  padding: 16px;
-  margin: 10px 0;
-  overflow: auto;
-  word-break: break-word;
-  line-height: 1.5;
-  background-color: var(--received-text-bg);
-  color: var(--text-color);
-}
-
-.reply-container {
-  margin-top: 15px;
-}
-
-#reply-input {
-  min-height: 80px;
-  background-color: var(--bg-color);
-  border: 1px solid var(--border-color);
-}
-
-/* File Preview */
-.preview {
+.spinner-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 20px auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  background-color: var(--preview-bg);
-  border-radius: var(--radius-small);
-  margin: 16px 0;
 }
 
-#img-preview {
-  max-width: 100%;
-  max-height: 250px;
-  border-radius: 4px;
-  box-shadow: var(--shadow-subtle);
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 6px solid var(--border-color);
+  border-top-color: var(--peer-icon-color);
+  animation: spinner-rotation 1.5s linear infinite;
 }
 
-.file-name {
-  font-weight: 500;
-  margin-bottom: 6px;
-  word-break: break-all;
-  font-size: 16px;
+.progress-percentage {
+  font-size: 24px;
+  font-weight: 600;
   color: var(--text-color);
 }
 
-.file-size {
-  font-size: 14px;
-  color: var(--file-size-color);
+.transfer-details {
+  margin-top: 16px;
+  width: 100%;
 }
 
-/* Toast */
+.file-counter {
+  font-size: 16px;
+  color: var(--secondary-text);
+  margin-bottom: 8px;
+}
+
+.transfer-filename {
+  font-size: 14px;
+  color: var(--text-color);
+  font-weight: 500;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.transfer-speed {
+  font-size: 14px;
+  color: var(--secondary-text);
+  text-align: center;
+  margin-top: 16px;
+}
+
+#close-transfer {
+  margin-top: 10px;
+  min-width: 100px;
+  transition: all 0.2s ease;
+}
+
+#close-transfer:hover {
+  background-color: var(--cancel-button-hover-bg);
+  transform: translateY(-2px);
+}
+
+/* ===== Toast Notification ===== */
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -823,7 +950,7 @@ footer {
   transform: translateY(0);
 }
 
-/* About Page */
+/* ===== About Page ===== */
 .about {
   position: fixed;
   top: 0;
@@ -907,7 +1034,7 @@ footer {
 
 .about-logo-section {
   margin-bottom: 30px;
-  padding-right: 20px; /* Make space for the close button */
+  padding-right: 20px;
 }
 
 .about-logo {
@@ -1022,154 +1149,76 @@ footer {
   opacity: 1;
 }
 
-/* Animation */
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
+/* ===== Animations ===== */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* Display Name */
-#display-name {
-  font-size: 16px;
-  font-weight: 500;
-  background-color: var(--display-name-bg);
-  padding: 10px 16px;
-  border-radius: var(--radius-small);
-  box-shadow: var(--shadow-subtle);
-  color: var(--text-color);
-}
-
-#display-name span {
-  background-color: var(--peer-icon-color);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 4px;
-  margin-left: 4px;
-  font-weight: 500;
-}
-
-/* Action Buttons Container */
-.action-buttons {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 20px 0;
-  gap: 12px;
-}
-
-/* Carousel Actions */
-.carousel-actions {
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-/* Theme Toggle Specific Styles */
-#theme-toggle {
-  margin-right: 2px;
-}
-
-/* Space between header icons */
-.header-right .icon-button {
-  margin-left: 2px;
-}
-
-/* Improve security for links */
-a[target="_blank"] {
-  rel: "noopener noreferrer";
-}
-
-/* Transfer Progress Dialog */
-.transfer-progress-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 0;
-  text-align: center;
-}
-
-.spinner-container {
-  position: relative;
-  width: 120px;
-  height: 120px;
-  margin: 20px auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.spinner-ring {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 6px solid var(--border-color);
-  border-top-color: var(--peer-icon-color);
-  animation: spinner-rotation 1.5s linear infinite;
-}
-
-/* Add a close button hover effect for the transfer dialog */
-#close-transfer {
-  margin-top: 10px;
-  min-width: 100px;
-  transition: all 0.2s ease;
-}
-
-#close-transfer:hover {
-  background-color: var(--cancel-button-hover-bg);
-  transform: translateY(-2px);
-}
-
-.progress-percentage {
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.transfer-details {
-    margin-top: 16px;
-    width: 100%;
-}
-
-.file-counter {
-    font-size: 16px;
-    color: var(--secondary-text);
-    margin-bottom: 8px;
-}
-
-.transfer-filename {
-    font-size: 14px;
-    color: var(--text-color);
-    font-weight: 500;
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 300px;
-    margin: 0 auto;
-}
-
-.transfer-speed {
-    font-size: 14px;
-    color: var(--secondary-text);
-    text-align: center;
-    margin-top: 16px;
+@keyframes dialog-appear {
+  from { 
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes spinner-rotation {
-  0% {
-      transform: rotate(0deg);
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.dialog.active .dialog-content {
+  animation: dialogAppear 0.3s ease forwards;
+}
+
+@keyframes dialogAppear {
+  from { 
+    opacity: 0.5;
+    transform: scale(0.95);
   }
-  100% {
-      transform: rotate(360deg);
+  to { 
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-/* Responsive adjustments */
+/* ===== Mobile Specific ===== */
+@media (max-width: 768px) {
+  /* Carousel navigation improvements */
+  .carousel-navigation {
+    margin-bottom: 20px;
+  }
+  
+  .carousel-nav-button {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .carousel-nav-button i {
+    font-size: 18px;
+  }
+  
+  /* Add swipe hint text for mobile */
+  .file-carousel::before {
+    content: 'Swipe to navigate';
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--secondary-text);
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+}
+
+/* ===== Responsive Styles ===== */
 @media (min-width: 600px) {
   .action-buttons {
     flex-direction: row;
@@ -1190,7 +1239,7 @@ a[target="_blank"] {
   }
   
   .about-step {
-    flex-direction: row; /* Keep horizontal layout on mobile */
+    flex-direction: row;
     gap: 12px;
   }
   
@@ -1220,7 +1269,6 @@ a[target="_blank"] {
   }
 }
 
-/* For very small screens, adjust spacing */
 @media (max-width: 380px) {
   .about-container {
     padding: 24px 16px;
@@ -1258,263 +1306,4 @@ a[target="_blank"] {
   .carousel-counter {
     font-size: 14px;
   }
-}
-
-/* Fix for anchor text decoration */
-a {
-  text-decoration: none;
-}
-
-/* Add these styles to your styles.css file */
-
-/* Carousel fade animations */
-.carousel-item-container {
-  position: relative;
-  min-height: 200px;
-  transition: opacity 0.15s ease;
-}
-
-.carousel-item-container.fade-out {
-  opacity: 0;
-}
-
-.carousel-item-container.fade-in {
-  animation: fadeIn 0.3s ease forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Make carousel buttons more responsive */
-.carousel-nav-button {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background-color: var(--carousel-nav-bg);
-  border: none;
-  color: var(--text-color);
-  transition: background-color 0.2s, transform 0.2s, opacity 0.2s;
-  position: relative;
-  z-index: 30;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin: 0 10px;
-  cursor: pointer;
-    user-select: none;
-}
-
-.carousel-nav-button:hover:not(.disabled) {
-  background-color: var(--carousel-nav-hover-bg);
-  transform: scale(1.1);
-}
-
-.carousel-nav-button.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Completely removes the native disabled attribute styling */
-.carousel-nav-button:disabled {
-  opacity: 0.4;
-  background-color: var(--carousel-nav-bg) !important;
-  color: var(--text-color) !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Fix cursor on disabled buttons */
-.carousel-nav-button:disabled,
-.carousel-nav-button.disabled {
-  pointer-events: all !important; 
-  cursor: not-allowed !important;
-}
-
-/* Remove focus outline for better appearance */
-.carousel-nav-button:focus {
-  outline: none;
-}
-
-/* Improved file display with transition effects */
-.carousel-item {
-  text-align: center;
-  opacity: 1;
-  transition: all 0.3s ease;
-}
-
-.file-info {
-  text-align: center;
-  max-width: 90%;
-  margin: 0 auto 16px auto;
-  transition: all 0.3s ease;
-}
-
-.preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background-color: var(--preview-bg);
-  border-radius: var(--radius-small);
-  margin: 16px 0;
-  transition: all 0.3s ease;
-}
-
-.carousel-image {
-  max-width: 100%;
-  max-height: 250px;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: var(--shadow-subtle);
-  transition: transform 0.3s ease;
-}
-
-.carousel-image:hover {
-  transform: scale(1.02);
-}
-
-/* Connected peer styling */
-.peer.connected .peer-icon {
-  box-shadow: 0 0 0 3px var(--accent-color);
-}
-
-.peer {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.peer:hover {
-  transform: translateY(-5px);
-}
-
-/* Dialog animation improvements */
-.dialog-content {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.dialog.active .dialog-content {
-  animation: dialogAppear 0.3s ease forwards;
-}
-
-@keyframes dialogAppear {
-  from { 
-    opacity: 0.5;
-    transform: scale(0.95);
-  }
-  to { 
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Enhanced counter styling */
-.carousel-counter {
-  padding: 5px 14px;
-  background-color: var(--carousel-nav-bg);
-  border-radius: 16px;
-  font-weight: 500;
-  min-width: 70px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-/* Improved swipe hint for mobile */
-@media (max-width: 768px) {
-  .carousel-item-container::after {
-    content: "";
-    position: absolute;
-    bottom: -15px;
-    left: calc(50% - 25px);
-    width: 50px;
-    height: 4px;
-    background-color: var(--border-color);
-    border-radius: 2px;
-    opacity: 0;
-  }
-  
-  .carousel-navigation {
-    margin-bottom: 20px;
-  }
-  
-  /* Make buttons bigger on mobile for easier tapping */
-  .carousel-nav-button {
-    width: 50px;
-    height: 50px;
-  }
-  
-  .carousel-nav-button i {
-    font-size: 18px;
-  }
-}
-
-/* Enable touch events on carousel content */
-.carousel-item-container {
-  position: relative;
-  min-height: 200px;
-  transition: opacity 0.15s ease;
-  pointer-events: auto; /* Change from 'none' to 'auto' to allow touch events */
-  touch-action: pan-y; /* Allow vertical scrolling but improve horizontal swipe detection */
-}
-
-/* Make carousel items themselves non-interactive to prevent unwanted clicks */
-.carousel-item {
-  pointer-events: none;
-}
-
-/* But allow interaction with specific elements inside items */
-.carousel-item a, 
-.carousel-item img,
-.carousel-item .preview,
-.carousel-item .file-info {
-  pointer-events: auto;
-}
-
-/* Add visual cue for swipeable content on mobile */
-@media (max-width: 768px) {
-  .file-carousel::after {
-      content: '';
-      position: absolute;
-      left: 50%;
-      bottom: 10px;
-      transform: translateX(-50%);
-      width: 50px;
-      height: 4px;
-      background-color: var(--border-color);
-      border-radius: 2px;
-      opacity: 0;
-      pointer-events: none;
-  }
-  
-  /* Add swipe hint text */
-  .carousel-item-container::before {
-      position: absolute;
-      bottom: -30px;
-      left: 0;
-      right: 0;
-      text-align: center;
-      font-size: 12px;
-      color: var(--secondary-text);
-      opacity: 0.7;
-      pointer-events: none;
-  }
-}
-
-/* Ensure that dialog content can receive touch events */
-.dialog-content {
-  touch-action: pan-y;
-  position: relative;
-  overflow: auto;
-}
-
-/* Make images in carousel non-draggable to improve swipe experience */
-.carousel-image {
-  -webkit-user-drag: none;
-  user-select: none;
-  -webkit-user-select: none;
 }

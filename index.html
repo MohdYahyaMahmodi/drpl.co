@@ -3,29 +3,37 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Drpl.co - AirDrop Alternative for All Devices | SnapDrop Replacement</title>
+    <title>Drpl.co - Simple File Sharing Between Any Devices on the Same Network</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
-    <!-- Primary Meta Tags -->
+    <!-- Primary Meta Tags - Enhanced for better SEO -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#121212">
     <meta name="color-scheme" content="dark light">
-    <meta name="description" content="Free AirDrop & SnapDrop alternative that works on all devices. Instantly share files between phones, tablets, and computers on the same network with no setup or accounts.">
-    <meta name="keywords" content="airdrop alternative, snapdrop alternative, file sharing, cross-platform sharing, local file transfer, wireless file transfer, p2p file sharing, snapdrop replacement">
+    <meta name="description" content="Free cross-platform file sharing without apps or accounts. Drpl.co instantly transfers files between phones, tablets, and computers on the same network with end-to-end privacy. AirDrop & SnapDrop alternative that works on all devices.">
+    <meta name="keywords" content="airdrop alternative, snapdrop alternative, file sharing, cross-platform sharing, local file transfer, wireless file transfer, p2p file sharing, snapdrop replacement, no account file sharing, local network transfer, private file sharing">
     <meta name="author" content="Drpl.co">
+    
+    <!-- Additional SEO tags -->
+    <meta name="robots" content="index, follow">
+    <meta name="application-name" content="Drpl.co">
+    <meta name="apple-mobile-web-app-title" content="Drpl.co">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- Open Graph / Facebook -->
+    <!-- Open Graph / Facebook - Enhanced -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://drpl.co/">
-    <meta property="og:title" content="Drpl.co - AirDrop Alternative for All Devices">
-    <meta property="og:description" content="Free alternative to AirDrop & SnapDrop that works across all devices. Share files instantly between phones, tablets, and computers with no setup.">
+    <meta property="og:title" content="Drpl.co - Secure File Sharing Across All Devices">
+    <meta property="og:description" content="Free P2P file sharing without installations. Share files instantly between any device on your network with end-to-end privacy. No accounts, no size limits, no setup.">
     <meta property="og:image" content="https://drpl.co/image.png">
+    <meta property="og:site_name" content="Drpl.co">
 
-    <!-- Twitter -->
+    <!-- Twitter - Enhanced -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://drpl.co/">
-    <meta property="twitter:title" content="Drpl.co - AirDrop Alternative for All Devices">
-    <meta property="twitter:description" content="Free alternative to AirDrop & SnapDrop that works across all devices. Share files instantly between phones, tablets, and computers with no setup.">
+    <meta property="twitter:title" content="Drpl.co - Secure Cross-Platform File Sharing">
+    <meta property="twitter:description" content="File sharing that just works. Instantly transfer between any devices on your network with no setup, no accounts, and complete privacy.">
     <meta property="twitter:image" content="https://drpl.co/image.png">
     
     <!-- Canonical URL -->
@@ -43,7 +51,7 @@
     </script>
     
     <!-- Styles -->
-    <link rel="stylesheet" type="text/css" href="styles.css?v=1.0.22">
+    <link rel="stylesheet" type="text/css" href="styles.css?v=1.0.23">
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -53,9 +61,10 @@
 </head>
 
 <body>
-    <!-- Background Animation Canvas -->
+    <!-- Background Animation Canvas - Visual element that creates a subtle animated background -->
     <canvas id="background-canvas"></canvas>
     
+    <!-- Header - Contains navigation and controls -->
     <header>
         <div class="header-left">
             <a href="https://github.com/your-username/drpl-co" class="icon-button" target="_blank" rel="noopener" title="View drpl.co on GitHub">
@@ -72,7 +81,7 @@
         </div>
     </header>
 
-    <!-- Peers -->
+    <!-- Peers Container - Main area that displays available devices -->
     <div id="peers-container" class="center">
         <div id="peers"></div>
         <div id="no-peers">
@@ -81,18 +90,19 @@
         </div>
     </div>
 
-    <!-- Footer -->
+    <!-- Footer - Contains user display name info -->
     <footer>
         <div id="display-name"></div>
     </footer>
 
-    <!-- Receive Dialog - Enhanced with carousel -->
+    <!-- Receive Dialog - Shows received files with carousel navigation -->
     <div id="receive-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
                 <h3>Files Received</h3>
                 
                 <div class="file-carousel">
+                    <!-- Navigation buttons for moving between files -->
                     <div class="carousel-navigation">
                         <button class="carousel-nav-button prev" id="carousel-prev">
                             <i class="fas fa-chevron-left"></i>
@@ -105,11 +115,13 @@
                         </button>
                     </div>
                     
+                    <!-- Container for displaying received files -->
                     <div class="carousel-item-container">
                         <!-- Files will be displayed here -->
                     </div>
                 </div>
                 
+                <!-- Actions for received files -->
                 <div class="dialog-buttons carousel-actions">
                     <a class="button" id="download-current" title="Download this file">
                         <i class="fas fa-download"></i> Download File
@@ -123,7 +135,7 @@
         </div>
     </div>
 
-    <!-- Send Text Dialog -->
+    <!-- Send Text Dialog - Interface for sending text messages -->
     <div id="send-text-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
@@ -137,7 +149,7 @@
         </div>
     </div>
 
-    <!-- Receive Text Dialog - Enhanced with reply option -->
+    <!-- Receive Text Dialog - Shows received messages with reply option -->
     <div id="receive-text-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
@@ -159,7 +171,7 @@
         </div>
     </div>
 
-    <!-- Action Dialog -->
+    <!-- Action Dialog - Shown when a peer is selected to initiate an action -->
     <div id="action-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
@@ -179,7 +191,7 @@
         </div>
     </div>
 
-    <!-- File Transfer Progress Dialog -->
+    <!-- File Transfer Progress Dialog - Shows active file transfer status -->
     <div id="transfer-progress-dialog" class="dialog">
         <div class="dialog-background center">
             <div class="dialog-content">
@@ -202,12 +214,12 @@
         </div>
     </div>
 
-    <!-- Toast Notification -->
+    <!-- Toast Notification - Displays temporary messages to the user -->
     <div class="toast-container center">
         <div id="toast" class="toast">File Transfer Completed</div>
     </div>
 
-    <!-- About Page - Clear and Informative -->
+    <!-- About Page - Information about the application -->
     <div id="about" class="about">
         <div class="about-content center fade-in">
             <div class="about-header">
@@ -289,10 +301,10 @@
         <div class="about-background"></div>
     </div>
 
-    <!-- Hidden File Input -->
+    <!-- Hidden File Input - Used for selecting files to send -->
     <input type="file" id="file-input" multiple hidden>
 
-    <!-- Audio Elements -->
+    <!-- Audio Elements - Sound effects for user feedback -->
     <audio id="sent-sound" src="sent.mp3" preload="auto"></audio>
 
     <!-- Schema.org structured data for better SEO -->
@@ -319,16 +331,22 @@
         "No account required",
         "No installation required",
         "Direct device-to-device transmission",
-        "End-to-end privacy"
+        "End-to-end privacy",
+        "Works on all major operating systems",
+        "No file size limits",
+        "Peer-to-peer file transfer",
+        "Instant device discovery",
+        "Text messaging capability",
+        "Secure local network sharing"
       ]
     }
     </script>
 
     <!-- Scripts - Make sure they're loaded in the correct order -->
-    <script src="network.js?v=1.0.22"></script>
-    <script src="theme.js?v=1.0.22"></script>
-    <script src="background-animation.js?v=1.0.22"></script>
-    <script src="notifications.js?v=1.0.22"></script>
-    <script src="ui.js?v=1.0.22"></script>
+    <script src="network.js?v=1.0.23"></script>
+    <script src="theme.js?v=1.0.23"></script>
+    <script src="background-animation.js?v=1.0.23"></script>
+    <script src="notifications.js?v=1.0.23"></script>
+    <script src="ui.js?v=1.0.23"></script>
 </body>
 </html>
