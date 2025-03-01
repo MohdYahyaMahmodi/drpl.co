@@ -423,11 +423,11 @@ footer {
 #no-peers {
   display: none;
   text-align: center;
-  max-width: 600px;
+  max-width: 1000px;
   padding: 30px;
   background-color: var(--no-peers-bg);
   border-radius: var(--radius-medium);
-  box-shadow: var(--shadow-subtle);
+
 }
 
 #no-peers h2 {
