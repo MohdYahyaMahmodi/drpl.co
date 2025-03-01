@@ -13,14 +13,6 @@ class Events {
   }
 }
 
-// Security helper to prevent XSS attacks
-const sanitizeText = (text) => {
-    if (typeof text !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
-
 // Server connection
 class ServerConnection {
   constructor() {
@@ -45,36 +37,18 @@ class ServerConnection {
 
   _onMessage(msg) {
       try {
-          if (typeof msg !== 'string') {
-              console.error('Received non-string message');
-              return;
-          }
-          
           msg = JSON.parse(msg);
-          
-          // Validate message structure
-          if (!msg || typeof msg !== 'object' || !msg.type) {
-              console.error('Invalid message format');
-              return;
-          }
-          
           console.log('Server message:', msg);
           
           switch (msg.type) {
               case 'peers':
-                  if (Array.isArray(msg.peers)) {
-                      Events.fire('peers', msg.peers);
-                  }
+                  Events.fire('peers', msg.peers);
                   break;
               case 'peer-joined':
-                  if (msg.peer && typeof msg.peer === 'object') {
-                      Events.fire('peer-joined', msg.peer);
-                  }
+                  Events.fire('peer-joined', msg.peer);
                   break;
               case 'peer-left':
-                  if (msg.peerId && typeof msg.peerId === 'string') {
-                      Events.fire('peer-left', msg.peerId);
-                  }
+                  Events.fire('peer-left', msg.peerId);
                   break;
               case 'signal':
                   Events.fire('signal', msg);
@@ -83,9 +57,7 @@ class ServerConnection {
                   this.send({ type: 'pong' });
                   break;
               case 'display-name':
-                  if (msg.message && typeof msg.message === 'object') {
-                      Events.fire('display-name', msg.message);
-                  }
+                  Events.fire('display-name', msg.message);
                   break;
               default:
                   console.error('Unknown message type:', msg.type);
@@ -97,10 +69,6 @@ class ServerConnection {
 
   send(message) {
       if (!this._isConnected()) return;
-      if (typeof message !== 'object' || message === null) {
-          console.error('Invalid message:', message);
-          return;
-      }
       this._socket.send(JSON.stringify(message));
   }
 
@@ -150,11 +118,6 @@ class Peer {
   }
 
   sendJSON(message) {
-      // Ensure message is a valid object
-      if (typeof message !== 'object' || message === null) {
-          console.error('Invalid message:', message);
-          return;
-      }
       this._send(JSON.stringify(message));
   }
 
@@ -213,13 +176,6 @@ class Peer {
       
       try {
           message = JSON.parse(message);
-          
-          // Validate message structure
-          if (!message || typeof message !== 'object' || !message.type) {
-              console.error('Invalid message format');
-              return;
-          }
-          
           console.log('Peer message:', message);
           
           switch (message.type) {
@@ -233,9 +189,7 @@ class Peer {
                   this._sendNextPartition();
                   break;
               case 'progress':
-                  if (typeof message.progress === 'number') {
-                      this._onDownloadProgress(message.progress);
-                  }
+                  this._onDownloadProgress(message.progress);
                   break;
               case 'transfer-complete':
                   this._onTransferCompleted();
@@ -251,20 +205,11 @@ class Peer {
 
   _onFileHeader(header) {
       this._lastProgress = 0;
-      
-      // Validate header data to prevent malicious input
-      const validatedHeader = {
-          name: typeof header.name === 'string' ? header.name : 'unnamed_file',
-          mime: typeof header.mime === 'string' ? header.mime : 'application/octet-stream',
-          size: typeof header.size === 'number' ? header.size : 0
-      };
-      
-      if (validatedHeader.size <= 0 || validatedHeader.size > 5368709120) { // 5GB max file size
-          console.error('Invalid file size:', validatedHeader.size);
-          return;
-      }
-      
-      this._digester = new FileDigester(validatedHeader, file => this._onFileReceived(file));
+      this._digester = new FileDigester({
+          name: header.name,
+          mime: header.mime,
+          size: header.size
+      }, file => this._onFileReceived(file));
   }
 
   _onChunkReceived(chunk) {
@@ -302,15 +247,8 @@ class Peer {
   }
 
   _onTextReceived(message) {
-      try {
-          const decoded = atob(message.text);
-          const escaped = decodeURIComponent(escape(decoded));
-          // We don't sanitize here because the UI.js will handle sanitization when displaying
-          Events.fire('text-received', { text: escaped, sender: this._peerId });
-      } catch (e) {
-          console.error('Error processing text message:', e);
-          // Prevent processing malformed messages
-      }
+      const escaped = decodeURIComponent(escape(atob(message.text)));
+      Events.fire('text-received', { text: escaped, sender: this._peerId });
   }
 }
 
@@ -481,11 +419,6 @@ class PeersManager {
   }
 
   _onMessage(message) {
-      if (!message || !message.sender || typeof message.sender !== 'string') {
-          console.error('Invalid message format:', message);
-          return;
-      }
-      
       if (!this.peers[message.sender]) {
           this.peers[message.sender] = new RTCPeer(this._server);
       }
@@ -493,14 +426,7 @@ class PeersManager {
   }
 
   _onPeers(peers) {
-      if (!Array.isArray(peers)) {
-          console.error('Invalid peers data:', peers);
-          return;
-      }
-      
       peers.forEach(peer => {
-          if (!peer || !peer.id) return;
-          
           if (this.peers[peer.id]) {
               this.peers[peer.id].refresh();
               return;
@@ -515,39 +441,14 @@ class PeersManager {
   }
 
   _onFilesSelected(message) {
-      if (!message || !message.to || !message.files) {
-          console.error('Invalid files selected message:', message);
-          return;
-      }
-      
-      if (!this.peers[message.to]) {
-          console.error('Peer not found:', message.to);
-          return;
-      }
-      
       this.peers[message.to].sendFiles(message.files);
   }
 
   _onSendText(message) {
-      if (!message || !message.to || typeof message.text !== 'string') {
-          console.error('Invalid send text message:', message);
-          return;
-      }
-      
-      if (!this.peers[message.to]) {
-          console.error('Peer not found:', message.to);
-          return;
-      }
-      
       this.peers[message.to].sendText(message.text);
   }
 
   _onPeerLeft(peerId) {
-      if (!peerId || typeof peerId !== 'string') {
-          console.error('Invalid peer left message:', peerId);
-          return;
-      }
-      
       const peer = this.peers[peerId];
       delete this.peers[peerId];
       if (!peer || !peer._conn) return;
