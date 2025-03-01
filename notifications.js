@@ -36,7 +36,7 @@ class Notifications {
       
       const notification = new Notification(title, {
           body: body,
-          icon: '/images/logo.png', // Make sure to add a logo image to your server
+          icon: 'favicon.png', // Make sure to add a logo image to your server
           data: data
       });
       
