@@ -6,6 +6,7 @@
   --accent-color: #007bff;
   --border-color: #e0e0e0;
   --peer-size: 110px;
+  --animation-color: rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -23,6 +24,24 @@ html, body {
   line-height: 1.5;
   color: var(--primary-color);
   background-color: var(--bg-color);
+}
+
+/* Canvas Styles */
+#background-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* Changed from -1 to 0 */
+  pointer-events: none;
+  display: block;
+}
+
+/* Make sure other elements appear above the canvas */
+#peers-container, header, footer, .dialog, .toast-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* Layout */
