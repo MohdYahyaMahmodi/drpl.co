@@ -178,6 +178,11 @@ class DrplUI {
         
         // End the transfer in the progress dialog
         this.dialogs.transferProgress.endTransfer(file.sender);
+        
+        // Show the receive dialog if it's not already visible
+        if (!this.dialogs.receive.element.classList.contains('active')) {
+            this.dialogs.receive.show();
+        }
     }
 
     /**
@@ -322,12 +327,15 @@ class DrplUI {
      * @param {string} peerId - Source peer ID
      */
     handleFileReceiveStart(fileHeader, peerId) {
-        // Start the transfer progress dialog for receiving
+        // Show the transfer progress dialog for receiving
         this.dialogs.transferProgress.startReceiving(
             peerId,
             fileHeader.name,
             fileHeader.size
         );
+        
+        // Show the dialog, even if it's already visible
+        this.dialogs.transferProgress.show();
     }
     
     /**
@@ -608,16 +616,15 @@ class ReceiveDialog extends Dialog {
             this.objectUrls[file.name] = URL.createObjectURL(file.blob);
         }
         
-        // If this is the first file, display it and show the dialog
+        // Update navigation buttons regardless of whether the dialog is showing
+        this._updateNavButtons();
+        
+        // If this is the first file, display it
         if (this.files.length === 1) {
             this.currentIndex = 0;
-            this.show();
             this.displayCurrentFile();
         } else {
-            // Just refresh the navigation if already showing
-            this._updateNavButtons();
-            
-            // Notify user about multiple files
+            // Notify user about multiple files if this isn't the first
             if (this.files.length === 2) {
                 Events.fire('notify-user', 'Multiple files received. Use arrows to navigate.');
             }
@@ -914,6 +921,9 @@ class ReceiveDialog extends Dialog {
         
         // Make sure buttons are properly updated when showing
         this._updateNavButtons();
+        
+        // Display the current file when showing the dialog
+        this.displayCurrentFile();
     }
     
     /**
@@ -1298,6 +1308,11 @@ class TransferProgressDialog extends Dialog {
      * @param {number} fileSize - Size of first file
      */
     startTransfer(peerId, fileName, fileCount = 1, fileSize = 0) {
+        // Force reset any completed transfer for this peer
+        if (this.activeTransfers[peerId] && this.activeTransfers[peerId].completed) {
+            delete this.activeTransfers[peerId];
+        }
+        
         this.activeTransfers[peerId] = {
             totalFiles: fileCount,
             currentFile: 1,
@@ -1308,7 +1323,8 @@ class TransferProgressDialog extends Dialog {
             startTime: Date.now(),
             lastUpdateTime: Date.now(),
             lastBytes: 0,
-            speed: 0 // Initialize speed to 0
+            speed: 0, // Initialize speed to 0
+            completed: false
         };
         
         // Set dialog title based on transfer direction
@@ -1328,6 +1344,11 @@ class TransferProgressDialog extends Dialog {
      * @param {number} fileSize - File size
      */
     startReceiving(peerId, fileName, fileSize = 0) {
+        // Force reset any completed transfer for this peer
+        if (this.activeTransfers[peerId] && this.activeTransfers[peerId].completed) {
+            delete this.activeTransfers[peerId];
+        }
+        
         this.activeTransfers[peerId] = {
             totalFiles: 1, // We might not know the total count yet
             currentFile: 1,
@@ -1339,14 +1360,14 @@ class TransferProgressDialog extends Dialog {
             lastUpdateTime: Date.now(),
             lastBytes: 0,
             speed: 0, // Initialize speed to 0
-            isReceiving: true
+            isReceiving: true,
+            completed: false
         };
         
         // Set dialog title for receiving
         $('transfer-title').textContent = 'Receiving File';
         
         this.updateUI(peerId);
-        this.show();
         
         // Initialize speed display with empty string or "Calculating..."
         $('transfer-speed').textContent = 'Calculating...';
@@ -1362,6 +1383,10 @@ class TransferProgressDialog extends Dialog {
         if (!this.activeTransfers[peerId]) return;
         
         const transfer = this.activeTransfers[peerId];
+        
+        // Don't update if already completed
+        if (transfer.completed) return;
+        
         transfer.progress = progress;
         
         // Update bytes transferred
@@ -1406,11 +1431,8 @@ class TransferProgressDialog extends Dialog {
         
         // Auto-close if transfer completed
         if (progress >= 1) {
-            // Mark the transfer as completed
-            transfer.completed = true;
-            
-            // Check if all transfers are completed
-            this.checkAndHideIfDone();
+            // Don't mark as completed yet - wait for endTransfer to be called
+            // This is to ensure we show the 100% state briefly
         }
     }
     
@@ -1429,16 +1451,20 @@ class TransferProgressDialog extends Dialog {
      * Check if all transfers are complete and hide dialog if so
      */
     checkAndHideIfDone() {
+        // Check if there are any active transfers
+        if (Object.keys(this.activeTransfers).length === 0) {
+            return;
+        }
+        
         // Check if all active transfers are completed
         const allCompleted = Object.values(this.activeTransfers).every(transfer => 
-            transfer.completed || transfer.progress >= 1
+            transfer.completed
         );
         
-        if (allCompleted && Object.keys(this.activeTransfers).length > 0) {
+        if (allCompleted) {
             // Give a short delay to show completion state before closing
             setTimeout(() => {
                 this.hide();
-                this.activeTransfers = {}; // Clear the transfers
             }, 1500);
         }
     }
@@ -1451,6 +1477,8 @@ class TransferProgressDialog extends Dialog {
     nextFile(peerId, fileName) {
         if (!this.activeTransfers[peerId]) return;
         
+        // Reset completed state for the next file
+        this.activeTransfers[peerId].completed = false;
         this.activeTransfers[peerId].currentFile++;
         this.activeTransfers[peerId].progress = 0;
         this.activeTransfers[peerId].bytesTransferred = 0;
@@ -1523,9 +1551,11 @@ class TransferProgressDialog extends Dialog {
     endTransfer(peerId) {
         if (!this.activeTransfers[peerId]) return;
         
+        // Set progress to 100% for UI consistency
+        this.activeTransfers[peerId].progress = 1;
+        
         // Mark this transfer as completed
         this.activeTransfers[peerId].completed = true;
-        this.activeTransfers[peerId].progress = 1;
         
         // Update the UI to show 100%
         this.updateUI(peerId);
@@ -1540,9 +1570,18 @@ class TransferProgressDialog extends Dialog {
     hide() {
         super.hide();
         
-        // Clean up on hide
+        // Don't immediately clear transfers - keep them around for a bit
+        // This helps with the case where a new transfer starts right after
+        // the old one completes - we want different transfers, not to reuse the same one
+        
+        // Schedule a delayed cleanup
         setTimeout(() => {
-            this.activeTransfers = {};
+            // Only clean up completed transfers
+            for (const peerId in this.activeTransfers) {
+                if (this.activeTransfers[peerId].completed) {
+                    delete this.activeTransfers[peerId];
+                }
+            }
             
             // Refresh all connections after transfer completes
             if (window.drplUI) {
