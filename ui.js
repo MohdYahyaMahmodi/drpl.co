@@ -55,16 +55,55 @@ class DrplUI {
     }
 
     onPeerJoined(peer) {
-        if ($(peer.id)) return; // Peer already exists
+        // Log peer info for debugging
+        console.log('Peer joined:', peer);
+        
+        // Skip if peer is missing ID or already exists
+        if (!peer || !peer.id) {
+            console.error('Missing peer ID:', peer);
+            return;
+        }
+        
+        if ($(peer.id)) {
+            console.log('Peer already exists:', peer.id);
+            return; // Peer already exists
+        }
+        
         this.createPeerElement(peer);
     }
 
     onPeers(peers) {
+        // Log peers for debugging
+        console.log('Peers received:', peers);
+        
+        // Handle case where peers might not be an array
+        if (!peers) {
+            console.error('Empty peers data');
+            return;
+        }
+        
         this.clearPeers();
-        peers.forEach(peer => this.onPeerJoined(peer));
+        
+        // Convert to array if not already
+        const peersArray = Array.isArray(peers) ? peers : [peers];
+        
+        peersArray.forEach(peer => {
+            if (peer && peer.id) {
+                this.onPeerJoined(peer);
+            } else {
+                console.warn('Invalid peer in peers list:', peer);
+            }
+        });
     }
 
     onPeerLeft(peerId) {
+        console.log('Peer left:', peerId);
+        
+        if (!peerId) {
+            console.error('Missing peer ID in peer-left event');
+            return;
+        }
+        
         const peerElement = $(peerId);
         if (peerElement) {
             peerElement.remove();
@@ -75,7 +114,15 @@ class DrplUI {
     }
 
     onDisplayName(data) {
+        console.log('Display name:', data);
+        
+        if (!data) {
+            console.error('Empty display name data');
+            return;
+        }
+        
         const displayNameElement = $('display-name');
+        if (!displayNameElement) return;
         
         // Clear existing content
         displayNameElement.innerHTML = '';
@@ -86,29 +133,49 @@ class DrplUI {
         
         // Create span for the display name
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = data.displayName;
+        // Use display name if available, otherwise use a default
+        nameSpan.textContent = data.displayName || 'Unknown';
         displayNameElement.appendChild(nameSpan);
     }
 
     onFileProgress(progress) {
+        if (!progress || !progress.sender) {
+            console.error('Invalid file progress data:', progress);
+            return;
+        }
+        
         const peerId = progress.sender;
         const peerElement = $(peerId);
         if (!peerElement) return;
         
-        this.setPeerProgress(peerElement, progress.progress);
+        this.setPeerProgress(peerElement, progress.progress || 0);
     }
 
     onFileReceived(file) {
+        if (!file) {
+            console.error('Received empty file data');
+            return;
+        }
+        
+        console.log('File received:', file);
         this.dialogs.receive.addFile(file);
     }
 
     onTextReceived(message) {
+        if (!message || !message.text) {
+            console.error('Received empty text message');
+            return;
+        }
+        
+        console.log('Text received from:', message.sender);
         this.dialogs.receiveText.showText(message.text, message.sender);
     }
 
     showToast(message) {
         const toast = $('toast');
-        toast.textContent = sanitizeText(message);
+        if (!toast) return;
+        
+        toast.textContent = typeof message === 'string' ? sanitizeText(message) : 'Notification';
         toast.classList.add('active');
         
         setTimeout(() => {
@@ -117,20 +184,31 @@ class DrplUI {
     }
 
     clearPeers() {
-        $('peers').innerHTML = '';
+        const peersContainer = $('peers');
+        if (peersContainer) {
+            peersContainer.innerHTML = '';
+        }
     }
 
     createPeerElement(peer) {
+        if (!peer || !peer.id || !peer.name) {
+            console.error('Cannot create peer element: missing data', peer);
+            return;
+        }
+        
         const peerElement = document.createElement('div');
         peerElement.className = 'peer';
         peerElement.id = peer.id;
         
+        // Ensure peer.name exists and has necessary properties
+        peer.name = peer.name || {};
+        
         const deviceType = this.getDeviceType(peer.name);
         const deviceIcon = this.getDeviceIcon(deviceType);
         
-        // Use sanitized values to prevent XSS
-        const displayName = sanitizeText(peer.name.displayName);
-        const deviceName = sanitizeText(peer.name.deviceName);
+        // Use sanitized values to prevent XSS and provide defaults
+        const displayName = sanitizeText(peer.name.displayName || 'Unknown');
+        const deviceName = sanitizeText(peer.name.deviceName || 'Device');
         
         peerElement.innerHTML = `
             <div class="peer-icon">
@@ -143,13 +221,19 @@ class DrplUI {
         
         peerElement.addEventListener('click', () => {
             this.currentPeer = peer.id;
-            this.dialogs.action.show(peer.name.displayName);
+            this.dialogs.action.show(peer.name.displayName || 'Unknown');
         });
         
-        $('peers').appendChild(peerElement);
+        const peersContainer = $('peers');
+        if (peersContainer) {
+            peersContainer.appendChild(peerElement);
+        } else {
+            console.error('Peers container not found');
+        }
     }
 
     getDeviceType(name) {
+        if (!name) return 'desktop';
         if (name.type === 'mobile') return 'mobile';
         if (name.type === 'tablet') return 'tablet';
         return 'desktop';
@@ -172,7 +256,9 @@ class DrplUI {
         }
         
         const progressCircle = peerElement.querySelector('.progress-circle');
-        progressCircle.style.setProperty('--progress', `${progress * 100}%`);
+        if (progressCircle) {
+            progressCircle.style.setProperty('--progress', `${progress * 100}%`);
+        }
         
         if (progress >= 1) {
             setTimeout(() => {
@@ -186,10 +272,16 @@ class DrplUI {
 class Dialog {
     constructor(id) {
         this.element = $(id);
+        if (!this.element) {
+            console.error(`Dialog element with id ${id} not found`);
+            return;
+        }
         this.setupCloseButtons();
     }
 
     setupCloseButtons() {
+        if (!this.element) return;
+        
         const closeButtons = this.element.querySelectorAll('[id^="close-"]');
         closeButtons.forEach(button => {
             button.addEventListener('click', () => this.hide());
@@ -197,11 +289,15 @@ class Dialog {
     }
 
     show() {
-        this.element.classList.add('active');
+        if (this.element) {
+            this.element.classList.add('active');
+        }
     }
 
     hide() {
-        this.element.classList.remove('active');
+        if (this.element) {
+            this.element.classList.remove('active');
+        }
     }
 }
 
@@ -218,34 +314,49 @@ class ReceiveDialog extends Dialog {
 
     _setupCarousel() {
         // Navigation buttons
-        $('carousel-prev').addEventListener('click', () => this.showPreviousFile());
-        $('carousel-next').addEventListener('click', () => this.showNextFile());
+        const prevButton = $('carousel-prev');
+        const nextButton = $('carousel-next');
+        
+        if (prevButton) {
+            prevButton.addEventListener('click', () => this.showPreviousFile());
+        }
+        
+        if (nextButton) {
+            nextButton.addEventListener('click', () => this.showNextFile());
+        }
         
         // Item container
-        this.carouselContainer = this.element.querySelector('.carousel-item-container');
+        if (this.element) {
+            this.carouselContainer = this.element.querySelector('.carousel-item-container');
+        }
     }
 
     _setupDownloadButtons() {
         // Current file download
-        $('download-current').addEventListener('click', () => {
-            if (this.files.length > 0) {
-                this.downloadFile(this.files[this.currentIndex]);
-            }
-        });
+        const downloadCurrentButton = $('download-current');
+        if (downloadCurrentButton) {
+            downloadCurrentButton.addEventListener('click', () => {
+                if (this.files.length > 0) {
+                    this.downloadFile(this.files[this.currentIndex]);
+                }
+            });
+        }
         
         // Download all as zip
-        $('download-all').addEventListener('click', () => {
-            this.downloadAllFiles();
-        });
+        const downloadAllButton = $('download-all');
+        if (downloadAllButton) {
+            downloadAllButton.addEventListener('click', () => {
+                this.downloadAllFiles();
+            });
+        }
         
-        // Close button
-        $('close-receive').addEventListener('click', () => {
-            this.hide();
-        });
+        // Close button setup is handled by parent Dialog class
     }
 
     _setupTouchEvents() {
         // Add touch swipe support for mobile
+        if (!this.carouselContainer) return;
+        
         let touchStartX = 0;
         let touchEndX = 0;
         
@@ -273,6 +384,13 @@ class ReceiveDialog extends Dialog {
 
     // Add a file to the carousel
     addFile(file) {
+        if (!file) {
+            console.error('Attempted to add empty file to carousel');
+            return;
+        }
+        
+        console.log('Adding file to carousel:', file.name);
+        
         // Add to files array
         this.files.push(file);
         
@@ -288,7 +406,7 @@ class ReceiveDialog extends Dialog {
     
     // Show the file at the current index
     displayCurrentFile() {
-        if (this.files.length === 0) return;
+        if (!this.carouselContainer || this.files.length === 0) return;
         
         const file = this.files[this.currentIndex];
         const url = URL.createObjectURL(file.blob);
@@ -320,7 +438,7 @@ class ReceiveDialog extends Dialog {
         const fileExt = this._getFileExtension(file.name);
         
         // Preview if it's an image
-        if (file.mime.startsWith('image/')) {
+        if (file.mime && file.mime.startsWith('image/')) {
             const preview = document.createElement('div');
             preview.className = 'preview';
             
@@ -378,14 +496,24 @@ class ReceiveDialog extends Dialog {
     
     // Update file counter display
     _updateFileCounter() {
-        $('current-file').textContent = this.currentIndex + 1;
-        $('total-files').textContent = this.files.length;
+        const currentFileElement = $('current-file');
+        const totalFilesElement = $('total-files');
+        
+        if (currentFileElement) {
+            currentFileElement.textContent = this.currentIndex + 1;
+        }
+        
+        if (totalFilesElement) {
+            totalFilesElement.textContent = this.files.length;
+        }
     }
     
     // Update navigation button states
     _updateNavButtons() {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
+        
+        if (!prevButton || !nextButton) return;
         
         // Disable prev button if at first file
         prevButton.disabled = this.currentIndex === 0;
@@ -401,11 +529,15 @@ class ReceiveDialog extends Dialog {
     
     // Get file extension
     _getFileExtension(filename) {
-        return filename.split('.').pop().toLowerCase();
+        if (!filename || typeof filename !== 'string') return '';
+        const parts = filename.split('.');
+        return parts.length > 1 ? parts.pop().toLowerCase() : '';
     }
     
     // Get appropriate icon class based on file type
     _getFileIconClass(mimeType) {
+        if (!mimeType) return 'fas fa-file fa-4x';
+        
         if (mimeType.startsWith('image/')) {
             return 'fas fa-file-image fa-4x';
         } else if (mimeType.startsWith('video/')) {
@@ -433,16 +565,26 @@ class ReceiveDialog extends Dialog {
     
     // Download a single file
     downloadFile(file) {
-        const url = URL.createObjectURL(file.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        if (!file || !file.blob) {
+            console.error('Invalid file for download', file);
+            return;
+        }
         
-        // Clean up the URL object
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        try {
+            const url = URL.createObjectURL(file.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name || 'file';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            // Clean up the URL object
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+        } catch (e) {
+            console.error('Error downloading file:', e);
+            Events.fire('notify-user', 'Error downloading file');
+        }
     }
     
     // Download all files as a ZIP
@@ -452,7 +594,10 @@ class ReceiveDialog extends Dialog {
             return;
         }
         
-        if (this.files.length === 0) return;
+        if (this.files.length === 0) {
+            Events.fire('notify-user', 'No files to download');
+            return;
+        }
         
         // Show loading toast
         Events.fire('notify-user', 'Preparing ZIP file...');
@@ -462,8 +607,10 @@ class ReceiveDialog extends Dialog {
             
             // Add all files to the ZIP
             for (const file of this.files) {
-                // Add file to zip with its name
-                zip.file(file.name, file.blob);
+                if (file && file.blob) {
+                    // Add file to zip with its name
+                    zip.file(file.name || 'file', file.blob);
+                }
             }
             
             // Generate the ZIP file
@@ -490,6 +637,8 @@ class ReceiveDialog extends Dialog {
     }
     
     _formatFileSize(bytes) {
+        if (!bytes || isNaN(bytes)) return '0 Bytes';
+        
         if (bytes >= 1e9) {
             return (Math.round(bytes / 1e8) / 10) + ' GB';
         } else if (bytes >= 1e6) {
@@ -514,7 +663,9 @@ class ReceiveDialog extends Dialog {
         this.files = [];
         this.currentIndex = 0;
         this._updateFileCounter();
-        this.carouselContainer.innerHTML = '';
+        if (this.carouselContainer) {
+            this.carouselContainer.innerHTML = '';
+        }
     }
 }
 
@@ -525,9 +676,19 @@ class SendTextDialog extends Dialog {
     }
 
     setupSendButton() {
-        $('send-text-button').addEventListener('click', () => {
-            const text = $('text-input').textContent;
-            if (!text.trim()) return;
+        const sendButton = $('send-text-button');
+        const textInput = $('text-input');
+        
+        if (!sendButton || !textInput) return;
+        
+        sendButton.addEventListener('click', () => {
+            const text = textInput.textContent;
+            if (!text || !text.trim()) return;
+            
+            if (!this.peerId) {
+                console.error('No peer ID for sending text');
+                return;
+            }
             
             Events.fire('send-text', {
                 text: text,
@@ -537,15 +698,24 @@ class SendTextDialog extends Dialog {
             // Fire event for sound
             Events.fire('text-sent');
             
-            $('text-input').textContent = '';
+            textInput.textContent = '';
             this.hide();
         });
     }
 
     show(peerId) {
+        if (!peerId) {
+            console.error('Cannot show text dialog without peer ID');
+            return;
+        }
+        
         this.peerId = peerId;
         super.show();
-        setTimeout(() => $('text-input').focus(), 100);
+        
+        const textInput = $('text-input');
+        if (textInput) {
+            setTimeout(() => textInput.focus(), 100);
+        }
     }
 }
 
@@ -558,32 +728,53 @@ class ReceiveTextDialog extends Dialog {
     }
 
     setupCopyButton() {
-        $('copy-text').addEventListener('click', () => {
-            this.copyText();
-        });
+        const copyButton = $('copy-text');
+        if (copyButton) {
+            copyButton.addEventListener('click', () => {
+                this.copyText();
+            });
+        }
     }
 
     setupReplyButton() {
-        $('reply-button').addEventListener('click', () => {
-            this.sendReply();
-        });
+        const replyButton = $('reply-button');
+        if (replyButton) {
+            replyButton.addEventListener('click', () => {
+                this.sendReply();
+            });
+        }
 
         // Add enter key support for reply input
         const replyInput = $('reply-input');
-        replyInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendReply();
-            }
-        });
+        if (replyInput) {
+            replyInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendReply();
+                }
+            });
+        }
     }
 
     showText(text, senderId) {
+        if (!text) {
+            console.error('Cannot show empty text message');
+            return;
+        }
+        
+        if (!senderId) {
+            console.error('No sender ID for received text');
+            return;
+        }
+        
         const textElement = $('received-text');
+        if (!textElement) return;
+        
         textElement.innerHTML = '';
         
         // Store the sender ID for replying
         this.currentSender = senderId;
+        this.text = text;
         
         if (isURL(text)) {
             const link = document.createElement('a');
@@ -596,20 +787,26 @@ class ReceiveTextDialog extends Dialog {
             textElement.textContent = sanitizeText(text);
         }
         
-        this.text = text;
-        
         // Clear the reply input
-        $('reply-input').textContent = '';
+        const replyInput = $('reply-input');
+        if (replyInput) {
+            replyInput.textContent = '';
+        }
         
         // Show the dialog
         this.show();
         
         // Focus on the reply input
-        setTimeout(() => $('reply-input').focus(), 300);
+        if (replyInput) {
+            setTimeout(() => replyInput.focus(), 300);
+        }
     }
 
     sendReply() {
-        const reply = $('reply-input').textContent.trim();
+        const replyInput = $('reply-input');
+        if (!replyInput) return;
+        
+        const reply = replyInput.textContent.trim();
         if (!reply || !this.currentSender) return;
         
         // Send the reply message to the original sender
@@ -622,7 +819,7 @@ class ReceiveTextDialog extends Dialog {
         Events.fire('text-sent');
         
         // Clear the reply input
-        $('reply-input').textContent = '';
+        replyInput.textContent = '';
         
         // Show confirmation
         Events.fire('notify-user', 'Reply sent');
@@ -632,6 +829,8 @@ class ReceiveTextDialog extends Dialog {
     }
 
     copyText() {
+        if (!this.text) return;
+        
         if (!navigator.clipboard) {
             this.legacyCopy();
             return;
@@ -639,25 +838,33 @@ class ReceiveTextDialog extends Dialog {
         
         navigator.clipboard.writeText(this.text)
             .then(() => Events.fire('notify-user', 'Text copied to clipboard'))
-            .catch(err => console.error('Could not copy text:', err));
+            .catch(err => {
+                console.error('Could not copy text:', err);
+                this.legacyCopy();
+            });
     }
 
     legacyCopy() {
-        const textArea = document.createElement('textarea');
-        textArea.value = this.text;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = 0;
-        document.body.appendChild(textArea);
-        textArea.select();
+        if (!this.text) return;
         
         try {
+            const textArea = document.createElement('textarea');
+            textArea.value = this.text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = 0;
+            document.body.appendChild(textArea);
+            textArea.select();
+            
             document.execCommand('copy');
             Events.fire('notify-user', 'Text copied to clipboard');
         } catch (err) {
             console.error('Could not copy text:', err);
+            Events.fire('notify-user', 'Failed to copy text');
+        } finally {
+            if (document.body.contains(textArea)) {
+                document.body.removeChild(textArea);
+            }
         }
-        
-        document.body.removeChild(textArea);
     }
 }
 
@@ -668,40 +875,73 @@ class ActionDialog extends Dialog {
     }
 
     setupActionButtons() {
-        $('send-file-button').addEventListener('click', () => {
-            this.hide();
-            this.selectFiles();
-        });
+        const sendFileButton = $('send-file-button');
+        const sendTextButton = $('send-text-action');
+        const fileInput = $('file-input');
         
-        $('send-text-action').addEventListener('click', () => {
-            this.hide();
-            // Show send text dialog
-            drplUI.dialogs.sendText.show(drplUI.currentPeer);
-        });
-        
-        $('file-input').addEventListener('change', e => {
-            const files = e.target.files;
-            if (!files.length) return;
-            
-            Events.fire('files-selected', {
-                files: files,
-                to: drplUI.currentPeer
+        if (sendFileButton) {
+            sendFileButton.addEventListener('click', () => {
+                this.hide();
+                this.selectFiles();
             });
-            
-            // Fire event for sound
-            Events.fire('file-sent');
-            
-            e.target.value = null; // Reset input
-        });
+        }
+        
+        if (sendTextButton) {
+            sendTextButton.addEventListener('click', () => {
+                this.hide();
+                // Show send text dialog
+                if (drplUI && drplUI.dialogs && drplUI.dialogs.sendText && drplUI.currentPeer) {
+                    drplUI.dialogs.sendText.show(drplUI.currentPeer);
+                } else {
+                    console.error('Cannot show send text dialog - missing required objects');
+                }
+            });
+        }
+        
+        if (fileInput) {
+            fileInput.addEventListener('change', e => {
+                const files = e.target.files;
+                if (!files || !files.length) return;
+                
+                if (!drplUI || !drplUI.currentPeer) {
+                    console.error('Cannot send files - no current peer');
+                    return;
+                }
+                
+                Events.fire('files-selected', {
+                    files: files,
+                    to: drplUI.currentPeer
+                });
+                
+                // Fire event for sound
+                Events.fire('file-sent');
+                
+                e.target.value = null; // Reset input
+            });
+        }
     }
 
     show(peerName) {
-        $('action-title').textContent = `Connect with ${sanitizeText(peerName)}`;
+        if (!peerName) {
+            console.warn('No peer name provided for action dialog');
+            peerName = 'Unknown';
+        }
+        
+        const actionTitle = $('action-title');
+        if (actionTitle) {
+            actionTitle.textContent = `Connect with ${sanitizeText(peerName)}`;
+        }
+        
         super.show();
     }
 
     selectFiles() {
-        $('file-input').click();
+        const fileInput = $('file-input');
+        if (fileInput) {
+            fileInput.click();
+        } else {
+            console.error('File input not found');
+        }
     }
 }
 
@@ -709,7 +949,10 @@ class ActionDialog extends Dialog {
 class Notifications {
     constructor() {
         // Check if the browser supports notifications
-        if (!('Notification' in window)) return;
+        if (!('Notification' in window)) {
+            console.log('Notifications not supported in this browser');
+            return;
+        }
         
         // Initialize notification permissions
         this.checkPermission();
@@ -735,6 +978,9 @@ class Notifications {
                     this.hasPermission = true;
                     this.notify('drpl.co', 'Notifications enabled');
                 }
+            })
+            .catch(err => {
+                console.error('Error requesting notification permission:', err);
             });
     }
     
@@ -742,56 +988,80 @@ class Notifications {
         if (!this.hasPermission) return;
         if (document.visibilityState === 'visible') return;
         
-        const notification = new Notification(sanitizeText(title), {
-            body: sanitizeText(body),
-            icon: 'favicon.png',
-            data: data
-        });
-        
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
+        try {
+            const notification = new Notification(sanitizeText(title), {
+                body: sanitizeText(body),
+                icon: 'favicon.png',
+                data: data
+            });
             
-            if (data.action) {
-                data.action();
-            }
-        };
-        
-        // Auto-close after 5 seconds
-        setTimeout(() => notification.close(), 5000);
-        
-        return notification;
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+                
+                if (data.action) {
+                    data.action();
+                }
+            };
+            
+            // Auto-close after 5 seconds
+            setTimeout(() => notification.close(), 5000);
+            
+            return notification;
+        } catch (e) {
+            console.error('Error creating notification:', e);
+        }
     }
     
     textNotification(data) {
-        if (document.visibilityState === 'visible') return;
+        if (!data || !data.text || !data.sender || document.visibilityState === 'visible') return;
         
         const text = data.text;
-        if (isURL(text)) {
-            this.notify('New Link Received', text, {
-                action: () => window.open(text, '_blank')
-            });
-        } else {
-            this.notify('New Message', text.substring(0, 50) + (text.length > 50 ? '...' : ''), {
-                action: () => drplUI.dialogs.receiveText.showText(text, data.sender)
-            });
+        
+        try {
+            if (isURL(text)) {
+                this.notify('New Link Received', text, {
+                    action: () => window.open(text, '_blank')
+                });
+            } else {
+                this.notify('New Message', text.substring(0, 50) + (text.length > 50 ? '...' : ''), {
+                    action: () => {
+                        if (drplUI && drplUI.dialogs && drplUI.dialogs.receiveText) {
+                            drplUI.dialogs.receiveText.showText(text, data.sender);
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Error showing text notification:', e);
         }
     }
     
     fileNotification(file) {
-        if (document.visibilityState === 'visible') return;
+        if (!file || document.visibilityState === 'visible') return;
         
-        this.notify('File Received', sanitizeText(file.name), {
-            action: () => {
-                drplUI.dialogs.receive.show();
-            }
-        });
+        try {
+            this.notify('File Received', sanitizeText(file.name || 'Unknown file'), {
+                action: () => {
+                    if (drplUI && drplUI.dialogs && drplUI.dialogs.receive) {
+                        drplUI.dialogs.receive.show();
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Error showing file notification:', e);
+        }
     }
 }
 
 // Initialize the UI
 let drplUI;
 document.addEventListener('DOMContentLoaded', () => {
-    drplUI = new DrplUI();
-    new Notifications();
+    try {
+        drplUI = new DrplUI();
+        new Notifications();
+        console.log('drpl.co UI initialized successfully');
+    } catch (e) {
+        console.error('Error initializing drpl.co UI:', e);
+    }
 });
