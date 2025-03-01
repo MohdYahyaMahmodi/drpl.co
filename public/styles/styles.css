@@ -1353,3 +1353,93 @@ footer {
     opacity: 1;
   }
 }
+
+/* ===== Refresh Button Styles ===== */
+#refresh-connection, #manual-refresh {
+  position: relative;
+  transition: transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+}
+
+#refresh-connection:hover, #manual-refresh:hover {
+  transform: scale(1.05) rotate(0deg);
+  animation-play-state: paused;
+}
+
+#refresh-connection:active, #manual-refresh:active {
+  transform: scale(0.95);
+}
+
+#refresh-connection .fa-sync {
+  transition: transform 0.3s ease;
+}
+
+#refresh-connection:hover .fa-sync {
+  transform: rotate(180deg);
+}
+
+/* Add a slight pulse effect when connections are being refreshed */
+.refreshing-connection #refresh-connection {
+  animation: pulse-refresh 1.5s ease infinite;
+}
+
+.refreshing-connection #refresh-connection .fa-sync {
+  animation: spin-refresh 1.5s linear infinite;
+}
+
+/* Animation for the refresh icon */
+@keyframes spin-refresh {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-refresh {
+  0% { box-shadow: 0 0 0 0 rgba(var(--peer-icon-color-rgb, 94, 148, 255), 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(var(--peer-icon-color-rgb, 94, 148, 255), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--peer-icon-color-rgb, 94, 148, 255), 0); }
+}
+
+/* Tooltip for mobile devices */
+@media (max-width: 768px) {
+  #refresh-connection::after, #manual-refresh::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--toast-bg);
+    color: var(--toast-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  #refresh-connection:active::after, #manual-refresh:active::after {
+    opacity: 1;
+    visibility: visible;
+    bottom: -35px;
+  }
+}
+
+/* Add RGB color variables for animation effects - for both light and dark themes */
+:root {
+  --peer-icon-color-rgb: 94, 148, 255;
+}
+
+[data-theme="dark"] {
+  --peer-icon-color-rgb: 74, 122, 214;
+}
+
+/* Button order and spacing */
+.header-right {
+  gap: 10px;
+}
+
+#manual-refresh {
+  margin-right: 2px;
+}

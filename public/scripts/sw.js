@@ -21,12 +21,12 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .catch(error => {
-        console.error('Cache addAll error:', error);
-        // Continue even if some assets fail to cache
-        return Promise.resolve();
+        return cache.addAll(STATIC_ASSETS)
+          .catch(error => {
+            console.error('Cache addAll error:', error);
+            // Continue even if some assets fail to cache
+            return Promise.resolve();
+          });
       })
       .then(() => self.skipWaiting())
   );
@@ -83,7 +83,14 @@ self.addEventListener('fetch', (event) => {
             // Cache the new resource
             caches.open(CACHE_NAME)
               .then((cache) => {
-                cache.put(event.request, responseToCache);
+                try {
+                  cache.put(event.request, responseToCache);
+                } catch (error) {
+                  console.error('Error putting in cache:', error);
+                }
+              })
+              .catch(error => {
+                console.error('Cache open error:', error);
               });
 
             return response;
@@ -93,7 +100,14 @@ self.addEventListener('fetch', (event) => {
             
             // For navigation requests, show the offline page
             if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
+              return caches.match('/index.html')
+                .catch(err => {
+                  console.error('Error serving offline fallback:', err);
+                  return new Response('Network error occurred', {
+                    status: 503,
+                    statusText: 'Service Unavailable'
+                  });
+                });
             }
             
             return new Response('Network error occurred', {

@@ -45,11 +45,21 @@ class DrplUI {
         Events.on('notify-user', e => this.showToast(e.detail));
         Events.on('file-sent', () => this.playSentSound());
         Events.on('text-sent', () => this.playSentSound());
-
-        $('refresh-connection').addEventListener('click', () => {
-            this.refreshConnections();
-            Events.fire('notify-user', 'Refreshing connections...');
-        });
+        
+        // Add refresh button events
+        if ($('refresh-connection')) {
+            $('refresh-connection').addEventListener('click', () => {
+                this.refreshConnections();
+                Events.fire('notify-user', 'Refreshing connections...');
+            });
+        }
+        
+        // Add manual page refresh button for PWA users
+        if ($('manual-refresh')) {
+            $('manual-refresh').addEventListener('click', () => {
+                window.location.reload();
+            });
+        }
     }
 
     /**
@@ -319,18 +329,29 @@ class DrplUI {
             fileHeader.size
         );
     }
-
+    
+    /**
+     * Refresh all peer connections
+     * Used to maintain connectivity without requiring page refresh
+     */
     refreshConnections() {
         // Refresh all peer connections
-        for (const peerId in window.drplNetwork.peers.peers) {
-            const peer = window.drplNetwork.peers.peers[peerId];
-            if (peer.refresh) {
-                peer.refresh();
+        if (window.drplNetwork && window.drplNetwork.peers) {
+            if (window.drplNetwork.peers.refreshAllPeers) {
+                window.drplNetwork.peers.refreshAllPeers();
+            } else {
+                // Fallback to individual peer refresh
+                for (const peerId in window.drplNetwork.peers.peers) {
+                    const peer = window.drplNetwork.peers.peers[peerId];
+                    if (peer && peer.refresh) {
+                        peer.refresh();
+                    }
+                }
             }
         }
         
         // Reconnect to server if needed
-        if (window.drplNetwork.server) {
+        if (window.drplNetwork && window.drplNetwork.server) {
             window.drplNetwork.server._connect();
         }
     }
@@ -370,16 +391,12 @@ class Dialog {
      * Hide the dialog
      */
     hide() {
-        super.hide();
+        this.element.classList.remove('active');
         
         // Refresh connections when dialog closes
-        if (window.drplNetwork && window.drplNetwork.peers) {
+        if (window.drplUI) {
             setTimeout(() => {
-                // Check if the peer is still connected
-                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
-                if (peer && peer.refresh) {
-                    peer.refresh();
-                }
+                window.drplUI.refreshConnections();
             }, 300);
         }
     }
@@ -882,18 +899,10 @@ class ReceiveDialog extends Dialog {
      * Override hide method to prevent hiding during transitions
      */
     hide() {
-        super.hide();
+        // Only allow hiding if not in transition
+        if (this.isTransitioning) return;
         
-        // Refresh connections when dialog closes
-        if (window.drplNetwork && window.drplNetwork.peers) {
-            setTimeout(() => {
-                // Check if the peer is still connected
-                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
-                if (peer && peer.refresh) {
-                    peer.refresh();
-                }
-            }, 300);
-        }
+        super.hide();
     }
     
     /**
@@ -986,6 +995,21 @@ class SendTextDialog extends Dialog {
         this.peerId = peerId;
         super.show();
         setTimeout(() => $('text-input').focus(), 100);
+    }
+    
+    /**
+     * Override hide to refresh connection after sending text
+     */
+    hide() {
+        super.hide();
+        
+        // Refresh the specific peer connection if available
+        if (window.drplUI && window.drplUI.currentPeer && window.drplNetwork && window.drplNetwork.peers) {
+            const peer = window.drplNetwork.peers.peers[window.drplUI.currentPeer];
+            if (peer && peer.refresh) {
+                setTimeout(() => peer.refresh(), 300);
+            }
+        }
     }
 }
 
@@ -1120,6 +1144,21 @@ class ReceiveTextDialog extends Dialog {
         
         document.body.removeChild(textArea);
     }
+    
+    /**
+     * Override hide to refresh the connection to the sender
+     */
+    hide() {
+        super.hide();
+        
+        // Refresh connection to the sender if available
+        if (this.currentSender && window.drplNetwork && window.drplNetwork.peers) {
+            const peer = window.drplNetwork.peers.peers[this.currentSender];
+            if (peer && peer.refresh) {
+                setTimeout(() => peer.refresh(), 300);
+            }
+        }
+    }
 }
 
 /**
@@ -1143,7 +1182,9 @@ class ActionDialog extends Dialog {
         $('send-text-action').addEventListener('click', () => {
             this.hide();
             // Show send text dialog
-            drplUI.dialogs.sendText.show(drplUI.currentPeer);
+            if (window.drplUI && window.drplUI.dialogs) {
+                window.drplUI.dialogs.sendText.show(window.drplUI.currentPeer);
+            }
         });
         
         $('file-input').addEventListener('change', e => {
@@ -1152,7 +1193,7 @@ class ActionDialog extends Dialog {
             
             Events.fire('files-selected', {
                 files: files,
-                to: drplUI.currentPeer
+                to: window.drplUI.currentPeer
             });
             
             // Fire event for sound
@@ -1176,6 +1217,21 @@ class ActionDialog extends Dialog {
      */
     selectFiles() {
         $('file-input').click();
+    }
+    
+    /**
+     * Override hide to ensure the peer connection stays alive
+     */
+    hide() {
+        super.hide();
+        
+        // Refresh the specific peer connection
+        if (window.drplUI && window.drplUI.currentPeer && window.drplNetwork && window.drplNetwork.peers) {
+            const peer = window.drplNetwork.peers.peers[window.drplUI.currentPeer];
+            if (peer && peer.refresh) {
+                setTimeout(() => peer.refresh(), 300);
+            }
+        }
     }
 }
 
@@ -1421,21 +1477,20 @@ class TransferProgressDialog extends Dialog {
     }
     
     /**
-     * Override hide method to ensure clean-up
+     * Override hide method to ensure clean-up and connection refresh
      */
     hide() {
         super.hide();
         
-        // Refresh connections when dialog closes
-        if (window.drplNetwork && window.drplNetwork.peers) {
-            setTimeout(() => {
-                // Check if the peer is still connected
-                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
-                if (peer && peer.refresh) {
-                    peer.refresh();
-                }
-            }, 300);
-        }
+        // Clean up on hide
+        setTimeout(() => {
+            this.activeTransfers = {};
+            
+            // Refresh all connections after transfer completes
+            if (window.drplUI) {
+                window.drplUI.refreshConnections();
+            }
+        }, 300);
     }
     
     /**
@@ -1461,6 +1516,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.BackgroundAnimation) {
         window.backgroundAnimation = new BackgroundAnimation();
     }
+    
+    // Add manual refresh button for PWA users
+    if ($('manual-refresh')) {
+        $('manual-refresh').addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+    
+    // Set up periodic connection refresh in the background
+    // This helps maintain connections even during periods of inactivity
+    setInterval(() => {
+        if (window.drplUI) {
+            window.drplUI.refreshConnections();
+        }
+    }, 60000); // Every minute
     
     // Expose UI to window for debugging
     window.drplUI = drplUI;

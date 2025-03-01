@@ -40,63 +40,12 @@
     <link rel="canonical" href="https://drpl.co/">
 
     <!-- Add these lines in the <head> section of your index.html -->
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="drpl.co">
-<meta name="theme-color" content="#121212">
-<link rel="apple-touch-icon" href="images/favicon.png">
-
-<!-- Add this right after the <body> tag in your index.html -->
-<div class="splash-screen" id="splash-screen">
-  <img src="images/favicon.png" alt="drpl.co" class="splash-logo">
-</div>
-
-<!-- Add this script right before the closing </body> tag -->
-<script>
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('scripts/sw.js')
-        .then(registration => {
-          console.log('Service Worker registered with scope:', registration.scope);
-        })
-        .catch(error => {
-          console.error('Service Worker registration failed:', error);
-        });
-    });
-  }
-
-  // Handle splash screen
-
-document.addEventListener('DOMContentLoaded', () => {
-  const splashScreen = document.getElementById('splash-screen');
-  
-  // Only show splash screen in standalone mode (installed PWA)
-  const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || 
-                            window.navigator.standalone || 
-                            document.referrer.includes('android-app://');
-  
-  if (!isInStandaloneMode) {
-    // Hide splash immediately if not in PWA mode
-    if (splashScreen) {
-      splashScreen.style.display = 'none';
-    }
-  } else {
-    // Show splash screen for PWA and hide after delay
-    setTimeout(() => {
-      if (splashScreen) {
-        splashScreen.classList.add('hidden');
-        
-        // Remove from DOM after transition completes
-        setTimeout(() => {
-          splashScreen.remove();
-        }, 500);
-      }
-    }, 1500); // Show splash for 1.5 seconds
-  }
-});
-</script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="drpl.co">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="images/favicon.png">
     
     <!-- Preload theme script - MUST come before CSS -->
     <script>
@@ -110,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </script>
     
     <!-- Styles -->
-    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.25">
+    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.26">
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -120,6 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
 </head>
 
 <body>
+    <!-- Add this right after the <body> tag in your index.html -->
+    <div class="splash-screen" id="splash-screen">
+      <img src="images/favicon.png" alt="drpl.co" class="splash-logo">
+    </div>
+
     <!-- Background Animation Canvas - Visual element that creates a subtle animated background -->
     <canvas id="background-canvas"></canvas>
     
@@ -131,6 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
             </a>
         </div>
         <div class="header-right">
+            <button id="refresh-connection" class="icon-button" title="Refresh connections">
+                <i class="fas fa-sync"></i>
+            </button>
+            <button id="manual-refresh" class="icon-button" title="Refresh page">
+                <i class="fas fa-redo-alt"></i>
+            </button>
             <button id="theme-toggle" class="icon-button" title="Toggle dark mode">
                 <i class="fas fa-sun"></i>
             </button>
@@ -138,12 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <i class="fas fa-info-circle"></i>
             </a>
         </div>
-        <button id="refresh-connection" class="icon-button" title="Refresh connections">
-            <i class="fas fa-sync"></i>
-        </button>
-        <button id="manual-refresh" class="icon-button" title="Refresh page">
-            <i class="fas fa-redo-alt"></i>
-        </button>
     </header>
 
     <!-- Peers Container - Main area that displays available devices -->
@@ -407,11 +361,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     </script>
 
+    <!-- Service Worker Registration -->
+    <script>
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('scripts/sw.js')
+            .then(registration => {
+              console.log('Service Worker registered with scope:', registration.scope);
+            })
+            .catch(error => {
+              console.error('Service Worker registration failed:', error);
+            });
+        });
+      }
+
+      // Handle splash screen
+      document.addEventListener('DOMContentLoaded', () => {
+        const splashScreen = document.getElementById('splash-screen');
+        
+        // Only show splash screen in standalone mode (installed PWA)
+        const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || 
+                                  window.navigator.standalone || 
+                                  document.referrer.includes('android-app://');
+        
+        if (!isInStandaloneMode) {
+          // Hide splash immediately if not in PWA mode
+          if (splashScreen) {
+            splashScreen.style.display = 'none';
+          }
+        } else {
+          // Show splash screen for PWA and hide after delay
+          setTimeout(() => {
+            if (splashScreen) {
+              splashScreen.classList.add('hidden');
+              
+              // Remove from DOM after transition completes
+              setTimeout(() => {
+                splashScreen.remove();
+              }, 500);
+            }
+          }, 1500); // Show splash for 1.5 seconds
+        }
+      });
+    </script>
+
     <!-- Scripts - Make sure they're loaded in the correct order -->
-    <script src="scripts/network.js?v=1.0.25"></script>
-    <script src="scripts/theme.js?v=1.0.25"></script>
-    <script src="scripts/background-animation.js?v=1.0.25"></script>
-    <script src="scripts/notifications.js?v=1.0.25"></script>
-    <script src="scripts/ui.js?v=1.0.25"></script>
+    <script src="scripts/network.js?v=1.0.26"></script>
+    <script src="scripts/theme.js?v=1.0.26"></script>
+    <script src="scripts/background-animation.js?v=1.0.26"></script>
+    <script src="scripts/notifications.js?v=1.0.26"></script>
+    <script src="scripts/ui.js?v=1.0.26"></script>
 </body>
 </html>
