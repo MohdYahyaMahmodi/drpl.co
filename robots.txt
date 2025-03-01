@@ -1,0 +1,2 @@
+User-agent: *
+Sitemap: https://drpl.co/sitemap.xml
