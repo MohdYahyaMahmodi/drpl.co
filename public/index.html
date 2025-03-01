@@ -59,7 +59,7 @@
     </script>
     
     <!-- Styles -->
-    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.26">
+    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.27">
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -366,7 +366,7 @@
         // Register service worker with versioning
         if ('serviceWorker' in navigator) {
           // Add version parameter to force update when version changes
-          const swVersion = '1.0.26'; // Change this when you update your service worker
+          const swVersion = '1.0.27'; // Change this when you update your service worker
           
           window.addEventListener('load', () => {
             navigator.serviceWorker.register('scripts/sw.js?v=' + swVersion)
@@ -419,10 +419,10 @@
       </script>
 
     <!-- Scripts - Make sure they're loaded in the correct order -->
-    <script src="scripts/network.js?v=1.0.26"></script>
-    <script src="scripts/theme.js?v=1.0.26"></script>
-    <script src="scripts/background-animation.js?v=1.0.26"></script>
-    <script src="scripts/notifications.js?v=1.0.26"></script>
-    <script src="scripts/ui.js?v=1.0.26"></script>
+    <script src="scripts/network.js?v=1.0.27"></script>
+    <script src="scripts/theme.js?v=1.0.27"></script>
+    <script src="scripts/background-animation.js?v=1.0.27"></script>
+    <script src="scripts/notifications.js?v=1.0.27"></script>
+    <script src="scripts/ui.js?v=1.0.27"></script>
 </body>
 </html>

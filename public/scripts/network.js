@@ -392,8 +392,10 @@ class Peer {
         // Calculate and report progress
         const progress = this._digester.progress;
         const bytesTransferred = this._digester ? Math.floor(this._digester.progress * this._digester._size) : 0;
+        
+        // Ensure we always pass bytesTransferred for speed calculations
         this._onDownloadProgress(progress, bytesTransferred);
-  
+    
         // Notify sender about our progress occasionally (1% increments)
         if (progress - this._lastProgress < 0.01) return;
         this._lastProgress = progress;
@@ -407,10 +409,13 @@ class Peer {
      * @private
      */
     _onDownloadProgress(progress, bytesTransferred = 0) {
+        // Ensure bytesTransferred is always a positive number
+        const bytes = Math.max(0, bytesTransferred);
+        
         Events.fire('file-progress', { 
             sender: this._peerId, 
             progress: progress,
-            bytesTransferred: bytesTransferred 
+            bytesTransferred: bytes
         });
     }
   

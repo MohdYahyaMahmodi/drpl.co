@@ -1307,7 +1307,8 @@ class TransferProgressDialog extends Dialog {
             bytesTransferred: 0,
             startTime: Date.now(),
             lastUpdateTime: Date.now(),
-            lastBytes: 0
+            lastBytes: 0,
+            speed: 0 // Initialize speed to 0
         };
         
         // Set dialog title based on transfer direction
@@ -1315,6 +1316,9 @@ class TransferProgressDialog extends Dialog {
         
         this.updateUI(peerId);
         this.show();
+        
+        // Initialize speed display with empty string or "Calculating..."
+        $('transfer-speed').textContent = 'Calculating...';
     }
     
     /**
@@ -1334,6 +1338,7 @@ class TransferProgressDialog extends Dialog {
             startTime: Date.now(),
             lastUpdateTime: Date.now(),
             lastBytes: 0,
+            speed: 0, // Initialize speed to 0
             isReceiving: true
         };
         
@@ -1342,6 +1347,9 @@ class TransferProgressDialog extends Dialog {
         
         this.updateUI(peerId);
         this.show();
+        
+        // Initialize speed display with empty string or "Calculating..."
+        $('transfer-speed').textContent = 'Calculating...';
     }
     
     /**
@@ -1356,20 +1364,40 @@ class TransferProgressDialog extends Dialog {
         const transfer = this.activeTransfers[peerId];
         transfer.progress = progress;
         
-        // Update bytes transferred if provided
+        // Update bytes transferred
         if (bytesTransferred > 0) {
             transfer.bytesTransferred = bytesTransferred;
+        } else if (transfer.fileSize && progress > 0) {
+            // If bytesTransferred not provided but we know file size and progress
+            transfer.bytesTransferred = Math.floor(transfer.fileSize * progress);
         }
         
         // Calculate transfer speed
         const now = Date.now();
         const timeDiff = (now - transfer.lastUpdateTime) / 1000; // Convert to seconds
         
-        if (timeDiff > 0.5) { // Update every 500ms
+        if (timeDiff >= 0.5) { // Update every 500ms
+            // Calculate bytes transferred since last update
             const bytesDiff = transfer.bytesTransferred - transfer.lastBytes;
-            const speed = bytesDiff / timeDiff; // Bytes per second
             
-            transfer.speed = speed;
+            if (bytesDiff > 0) {
+                // Calculate speed in bytes per second
+                const instantSpeed = bytesDiff / timeDiff;
+                
+                // Smooth the speed calculation with exponential moving average
+                // Use previous speed as a baseline if it exists
+                if (transfer.speed > 0) {
+                    // 70% new speed, 30% old speed for smoother display
+                    transfer.speed = (0.7 * instantSpeed) + (0.3 * transfer.speed);
+                } else {
+                    transfer.speed = instantSpeed;
+                }
+                
+                // Update UI with the new speed
+                this.updateSpeedDisplay(transfer.speed);
+            }
+            
+            // Update timestamps and bytes for next calculation
             transfer.lastUpdateTime = now;
             transfer.lastBytes = transfer.bytesTransferred;
         }
@@ -1383,6 +1411,17 @@ class TransferProgressDialog extends Dialog {
             
             // Check if all transfers are completed
             this.checkAndHideIfDone();
+        }
+    }
+    
+    /**
+     * Update the speed display in the UI
+     * @param {number} bytesPerSecond - Speed in bytes per second
+     */
+    updateSpeedDisplay(bytesPerSecond) {
+        const speedElement = $('transfer-speed');
+        if (speedElement) {
+            speedElement.textContent = this._formatSpeed(bytesPerSecond);
         }
     }
     
@@ -1414,12 +1453,19 @@ class TransferProgressDialog extends Dialog {
         
         this.activeTransfers[peerId].currentFile++;
         this.activeTransfers[peerId].progress = 0;
+        this.activeTransfers[peerId].bytesTransferred = 0;
+        this.activeTransfers[peerId].lastBytes = 0;
+        this.activeTransfers[peerId].speed = 0;
+        this.activeTransfers[peerId].lastUpdateTime = Date.now();
         
         if (fileName) {
             this.activeTransfers[peerId].fileName = fileName;
         }
         
         this.updateUI(peerId);
+        
+        // Reset speed display
+        $('transfer-speed').textContent = 'Calculating...';
     }
     
     /**
@@ -1430,16 +1476,18 @@ class TransferProgressDialog extends Dialog {
         const transfer = this.activeTransfers[peerId];
         if (!transfer) return;
         
+        // Update file counter
         $('current-transfer-file').textContent = transfer.currentFile;
         $('total-transfer-files').textContent = transfer.totalFiles;
+        
+        // Update filename
         $('transfer-filename').textContent = transfer.fileName || '';
         
+        // Update progress percentage
         const percentage = Math.round(transfer.progress * 100);
-        document.querySelector('.progress-percentage').textContent = `${percentage}%`;
-        
-        // Update transfer speed if available
-        if (transfer.speed !== undefined) {
-            $('transfer-speed').textContent = this._formatSpeed(transfer.speed);
+        const progressElement = document.querySelector('.progress-percentage');
+        if (progressElement) {
+            progressElement.textContent = `${percentage}%`;
         }
     }
     
@@ -1449,8 +1497,18 @@ class TransferProgressDialog extends Dialog {
      * @returns {string} Formatted speed string
      */
     _formatSpeed(bytesPerSecond) {
+        // Handle edge cases
+        if (bytesPerSecond === undefined || bytesPerSecond === null || isNaN(bytesPerSecond)) {
+            return 'Calculating...';
+        }
+        
+        if (bytesPerSecond < 1) {
+            return '< 1 B/s';
+        }
+        
+        // Format based on size
         if (bytesPerSecond >= 1e6) {
-            return (Math.round(bytesPerSecond / 1e5) / 10) + ' MB/s';
+            return (Math.round(bytesPerSecond / 1e5) / 10).toFixed(1) + ' MB/s';
         } else if (bytesPerSecond >= 1e3) {
             return Math.round(bytesPerSecond / 1e3) + ' KB/s';
         } else {
