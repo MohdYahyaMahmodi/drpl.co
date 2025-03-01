@@ -1,18 +1,19 @@
 {
-  "name": "drpl.co",
+  "name": "drpl-co",
   "version": "1.0.0",
-  "description": "Easy file sharing via WebRTC",
+  "description": "Simple device file sharing with peer-to-peer technology",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "ua-parser-js": "^1.0.35",
     "unique-names-generator": "^4.7.1",
     "ws": "^8.13.0"
   },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
-  }
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "",
+  "license": "MIT"
 }

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>drpl.co - Share files instantly</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="Instantly share files with people on the same network. No setup, no signup.">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <div class="header-left">
+            <a href="https://github.com/your-username/drpl-co" class="icon-button" target="_blank" rel="noopener" title="View on GitHub">
+                <i class="fab fa-github"></i>
+            </a>
+        </div>
+        <div class="header-right">
+            <a href="#about" class="icon-button" title="About drpl.co">
+                <i class="fas fa-info-circle"></i>
+            </a>
+        </div>
+    </header>
+
+    <!-- Peers -->
+    <div id="peers-container" class="center">
+        <div id="peers"></div>
+        <div id="no-peers">
+            <h2>Open drpl.co on your other device and make sure it is connected to the same network</h2>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div id="display-name"></div>
+    </footer>
+
+    <!-- Receive Dialog -->
+    <div id="receive-dialog" class="dialog">
+        <div class="dialog-background center">
+            <div class="dialog-content">
+                <h3>File Received</h3>
+                <div class="file-name" id="file-name">Filename</div>
+                <div class="file-size" id="file-size"></div>
+                <div class="preview" style="display: none;">
+                    <img id="img-preview" src="" alt="Preview">
+                </div>
+                <div class="dialog-buttons">
+                    <a class="button" id="download" title="Download File">Save</a>
+                    <button class="button" id="close-receive">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Send Text Dialog -->
+    <div id="send-text-dialog" class="dialog">
+        <div class="dialog-background center">
+            <div class="dialog-content">
+                <h3>Send a Message</h3>
+                <div id="text-input" class="textarea" contenteditable="true" placeholder="Type your message here..."></div>
+                <div class="dialog-buttons">
+                    <button class="button" id="send-text-button">Send</button>
+                    <button class="button" id="close-text-send">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receive Text Dialog -->
+    <div id="receive-text-dialog" class="dialog">
+        <div class="dialog-background center">
+            <div class="dialog-content">
+                <h3>Message Received</h3>
+                <div id="received-text" class="received-text"></div>
+                <div class="dialog-buttons">
+                    <button class="button" id="copy-text">Copy</button>
+                    <button class="button" id="close-text-receive">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Dialog -->
+    <div id="action-dialog" class="dialog">
+        <div class="dialog-background center">
+            <div class="dialog-content">
+                <h3 id="action-title">Connect</h3>
+                <div class="action-buttons">
+                    <button class="button action-button" id="send-file-button">
+                        <i class="fas fa-file"></i> Send Files
+                    </button>
+                    <button class="button action-button" id="send-text-action">
+                        <i class="fas fa-comment"></i> Send Message
+                    </button>
+                </div>
+                <div class="dialog-buttons">
+                    <button class="button" id="close-action">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container center">
+        <div id="toast" class="toast">File Transfer Completed</div>
+    </div>
+
+    <!-- About Page -->
+    <div id="about" class="about">
+        <div class="about-content center fade-in">
+            <div class="about-header">
+                <a href="#" class="close icon-button">
+                    <i class="fas fa-times"></i>
+                </a>
+            </div>
+            <div class="about-logo">
+                <i class="fas fa-share-alt"></i>
+            </div>
+            <h1>drpl.co</h1>
+            <p class="about-description">The easiest way to share files between devices on the same network</p>
+            
+            <div class="about-details">
+                <h3>How it works</h3>
+                <p>drpl.co allows you to share files directly between devices on the same network without any setup or accounts.</p>
+                <p>Simply open drpl.co on both devices and they will automatically discover each other.</p>
+                <p>Click on a device to send files or messages securely using peer-to-peer technology.</p>
+                <p>No data is stored on any server, everything is transferred directly between devices.</p>
+            </div>
+        </div>
+        <div class="about-background"></div>
+    </div>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="file-input" multiple hidden>
+
+    <!-- Scripts -->
+    <script src="network.js"></script>
+    <script src="ui.js"></script>
+    <script src="notifications.js"></script>
+</body>
+</html>
