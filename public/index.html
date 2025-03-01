@@ -68,10 +68,23 @@
   }
 
   // Handle splash screen
-  document.addEventListener('DOMContentLoaded', () => {
-    // Hide splash screen after content loads
+
+document.addEventListener('DOMContentLoaded', () => {
+  const splashScreen = document.getElementById('splash-screen');
+  
+  // Only show splash screen in standalone mode (installed PWA)
+  const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || 
+                            window.navigator.standalone || 
+                            document.referrer.includes('android-app://');
+  
+  if (!isInStandaloneMode) {
+    // Hide splash immediately if not in PWA mode
+    if (splashScreen) {
+      splashScreen.style.display = 'none';
+    }
+  } else {
+    // Show splash screen for PWA and hide after delay
     setTimeout(() => {
-      const splashScreen = document.getElementById('splash-screen');
       if (splashScreen) {
         splashScreen.classList.add('hidden');
         
@@ -81,7 +94,8 @@
         }, 500);
       }
     }, 1500); // Show splash for 1.5 seconds
-  });
+  }
+});
 </script>
     
     <!-- Preload theme script - MUST come before CSS -->
@@ -96,7 +110,7 @@
     </script>
     
     <!-- Styles -->
-    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.23">
+    <link rel="stylesheet" type="text/css" href="styles/styles.css?v=1.0.24">
     
     <!-- FontAwesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -388,10 +402,10 @@
     </script>
 
     <!-- Scripts - Make sure they're loaded in the correct order -->
-    <script src="scripts/network.js?v=1.0.23"></script>
-    <script src="scripts/theme.js?v=1.0.23"></script>
-    <script src="scripts/background-animation.js?v=1.0.23"></script>
-    <script src="scripts/notifications.js?v=1.0.23"></script>
-    <script src="scripts/ui.js?v=1.0.23"></script>
+    <script src="scripts/network.js?v=1.0.24"></script>
+    <script src="scripts/theme.js?v=1.0.24"></script>
+    <script src="scripts/background-animation.js?v=1.0.24"></script>
+    <script src="scripts/notifications.js?v=1.0.24"></script>
+    <script src="scripts/ui.js?v=1.0.24"></script>
 </body>
 </html>

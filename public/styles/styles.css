@@ -1324,6 +1324,10 @@ footer {
   opacity: 1;
 }
 
+.splash-screen[style*="display: none"] {
+  display: none !important;
+}
+
 .splash-screen.hidden {
   opacity: 0;
   pointer-events: none;
