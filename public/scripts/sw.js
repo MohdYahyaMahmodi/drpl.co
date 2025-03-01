@@ -5,15 +5,14 @@ const CACHE_NAME = 'drpl-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css',
+  '/styles/styles.css',
   '/scripts/ui.js',
   '/scripts/network.js',
   '/scripts/theme.js',
   '/scripts/background-animation.js',
   '/scripts/notifications.js',
   '/images/favicon.png',
-  '/offline.html',
-  // Add other essential assets here
+  '/manifest.json'
 ];
 
 // Install event - cache static assets
@@ -23,6 +22,11 @@ self.addEventListener('install', (event) => {
       .then((cache) => {
         console.log('Caching static assets');
         return cache.addAll(STATIC_ASSETS);
+      })
+      .catch(error => {
+        console.error('Cache addAll error:', error);
+        // Continue even if some assets fail to cache
+        return Promise.resolve();
       })
       .then(() => self.skipWaiting())
   );
@@ -50,7 +54,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and socket connections
   if (event.request.method !== 'GET' || 
-      event.request.url.includes('/server')) {
+       event.request.url.includes('/server')) {
     return;
   }
 
@@ -89,8 +93,16 @@ self.addEventListener('fetch', (event) => {
             
             // For navigation requests, show the offline page
             if (event.request.mode === 'navigate') {
-              return caches.match('/offline.html');
+              return caches.match('/index.html');
             }
+            
+            return new Response('Network error occurred', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: new Headers({
+                'Content-Type': 'text/plain'
+              })
+            });
           });
       })
   );

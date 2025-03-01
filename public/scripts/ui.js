@@ -45,6 +45,11 @@ class DrplUI {
         Events.on('notify-user', e => this.showToast(e.detail));
         Events.on('file-sent', () => this.playSentSound());
         Events.on('text-sent', () => this.playSentSound());
+
+        $('refresh-connection').addEventListener('click', () => {
+            this.refreshConnections();
+            Events.fire('notify-user', 'Refreshing connections...');
+        });
     }
 
     /**
@@ -314,6 +319,21 @@ class DrplUI {
             fileHeader.size
         );
     }
+
+    refreshConnections() {
+        // Refresh all peer connections
+        for (const peerId in window.drplNetwork.peers.peers) {
+            const peer = window.drplNetwork.peers.peers[peerId];
+            if (peer.refresh) {
+                peer.refresh();
+            }
+        }
+        
+        // Reconnect to server if needed
+        if (window.drplNetwork.server) {
+            window.drplNetwork.server._connect();
+        }
+    }
 }
 
 /**
@@ -350,7 +370,18 @@ class Dialog {
      * Hide the dialog
      */
     hide() {
-        this.element.classList.remove('active');
+        super.hide();
+        
+        // Refresh connections when dialog closes
+        if (window.drplNetwork && window.drplNetwork.peers) {
+            setTimeout(() => {
+                // Check if the peer is still connected
+                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
+                if (peer && peer.refresh) {
+                    peer.refresh();
+                }
+            }, 300);
+        }
     }
 }
 
@@ -851,10 +882,18 @@ class ReceiveDialog extends Dialog {
      * Override hide method to prevent hiding during transitions
      */
     hide() {
-        // Only allow hiding if not in transition
-        if (this.isTransitioning) return;
-        
         super.hide();
+        
+        // Refresh connections when dialog closes
+        if (window.drplNetwork && window.drplNetwork.peers) {
+            setTimeout(() => {
+                // Check if the peer is still connected
+                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
+                if (peer && peer.refresh) {
+                    peer.refresh();
+                }
+            }, 300);
+        }
     }
     
     /**
@@ -1386,10 +1425,17 @@ class TransferProgressDialog extends Dialog {
      */
     hide() {
         super.hide();
-        // Clean up on hide
-        setTimeout(() => {
-            this.activeTransfers = {};
-        }, 300);
+        
+        // Refresh connections when dialog closes
+        if (window.drplNetwork && window.drplNetwork.peers) {
+            setTimeout(() => {
+                // Check if the peer is still connected
+                const peer = window.drplNetwork.peers.peers[drplUI.currentPeer];
+                if (peer && peer.refresh) {
+                    peer.refresh();
+                }
+            }, 300);
+        }
     }
     
     /**

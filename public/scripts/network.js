@@ -342,6 +342,13 @@ class Peer {
                 case 'text':
                     this._onTextReceived(message);
                     break;
+                case 'heartbeat':
+                    // Just acknowledge heartbeats
+                    this.sendJSON({ type: 'heartbeat-ack' });
+                    break;
+                case 'heartbeat-ack':
+                    // Received acknowledgment of our heartbeat
+                    break;
             }
         } catch (e) {
             console.error('Error processing peer message:', e);
@@ -467,6 +474,9 @@ class RTCPeer extends Peer {
     constructor(serverConnection, peerId) {
         super(serverConnection, peerId);
         
+        // Initialize heartbeat interval
+        this._heartbeatInterval = null;
+        
         if (!peerId) return; // We will listen for a caller
         this._connect(peerId, true);
     }
@@ -590,8 +600,40 @@ class RTCPeer extends Peer {
         channel.onclose = () => this._onChannelClosed();
         this._channel = channel;
         
+        // Start heartbeat to keep connection alive
+        this._startHeartbeat();
+        
         // Notify that the connection is established
         Events.fire('peer-connection-established', this._peerId);
+    }
+  
+    /**
+     * Start sending heartbeat messages to keep the connection alive
+     * @private
+     */
+    _startHeartbeat() {
+        // Clear any existing heartbeat
+        this._stopHeartbeat();
+        
+        // Send heartbeat every 10 seconds
+        this._heartbeatInterval = setInterval(() => {
+            if (this._isConnected()) {
+                this.sendJSON({ type: 'heartbeat' });
+            } else if (!this._isConnecting()) {
+                this.refresh();
+            }
+        }, 10000);
+    }
+    
+    /**
+     * Stop the heartbeat messages
+     * @private
+     */
+    _stopHeartbeat() {
+        if (this._heartbeatInterval) {
+            clearInterval(this._heartbeatInterval);
+            this._heartbeatInterval = null;
+        }
     }
   
     /**
@@ -600,6 +642,9 @@ class RTCPeer extends Peer {
      */
     _onChannelClosed() {
         console.log('Data channel closed with', this._peerId);
+        
+        // Stop heartbeat when channel closes
+        this._stopHeartbeat();
         
         if (!this._isCaller) return;
         this._connect(this._peerId, true); // Reopen the channel
@@ -691,6 +736,21 @@ class RTCPeer extends Peer {
     _isConnecting() {
         return this._channel && this._channel.readyState === 'connecting';
     }
+    
+    /**
+     * Clean up resources when connection is destroyed
+     */
+    destroy() {
+        this._stopHeartbeat();
+        if (this._channel) {
+            this._channel.onclose = null;
+            this._channel.close();
+        }
+        if (this._conn) {
+            this._conn.close();
+            this._conn = null;
+        }
+    }
 }
   
 // ======================================================================
@@ -717,6 +777,16 @@ class WSPeer extends Peer {
     _send(message) {
         message.to = this._peerId;
         this._server.send(message);
+    }
+    
+    /**
+     * Refresh connection if needed
+     */
+    refresh() {
+        // For WebSocket peers, just make sure server connection is active
+        if (this._server) {
+            this._server._connect();
+        }
     }
 }
   
@@ -808,10 +878,27 @@ class PeersManager {
      */
     _onPeerLeft(peerId) {
         const peer = this.peers[peerId];
-        delete this.peers[peerId];
+        if (!peer) return;
         
-        if (!peer || !peer._conn) return;
-        peer._conn.close();
+        // Clean up peer resources if available
+        if (peer.destroy) {
+            peer.destroy();
+        } else if (peer._conn) {
+            peer._conn.close();
+        }
+        
+        delete this.peers[peerId];
+    }
+    
+    /**
+     * Refresh all peer connections
+     */
+    refreshAllPeers() {
+        for (const peerId in this.peers) {
+            if (this.peers[peerId].refresh) {
+                this.peers[peerId].refresh();
+            }
+        }
     }
 }
   
