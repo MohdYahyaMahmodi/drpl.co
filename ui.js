@@ -211,6 +211,7 @@ class ReceiveDialog extends Dialog {
         super('receive-dialog');
         this.files = [];
         this.currentIndex = 0;
+        this.objectUrls = {}; // Store URLs to prevent memory leaks
         this._setupCarousel();
         this._setupDownloadButtons();
         this._setupKeyboardNavigation();
@@ -222,15 +223,19 @@ class ReceiveDialog extends Dialog {
         const prevButton = $('carousel-prev');
         const nextButton = $('carousel-next');
         
-        prevButton.onclick = () => {
+        prevButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.showPreviousFile();
             return false;
-        };
+        });
         
-        nextButton.onclick = () => {
+        nextButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.showNextFile();
             return false;
-        };
+        });
         
         // Item container
         this.carouselContainer = this.element.querySelector('.carousel-item-container');
@@ -252,7 +257,7 @@ class ReceiveDialog extends Dialog {
     
     _setupKeyboardNavigation() {
         // Add keyboard navigation support
-        window.addEventListener('keydown', (e) => {
+        this._keyHandler = (e) => {
             // Only process if dialog is active
             if (!this.element.classList.contains('active')) return;
             
@@ -266,7 +271,9 @@ class ReceiveDialog extends Dialog {
                 this.hide();
                 e.preventDefault();
             }
-        });
+        };
+        
+        window.addEventListener('keydown', this._keyHandler);
     }
     
     _setupTouchNavigation() {
@@ -311,11 +318,16 @@ class ReceiveDialog extends Dialog {
         // Update file counter
         this._updateFileCounter();
         
+        // Create object URL for the file
+        if (!this.objectUrls[file.name]) {
+            this.objectUrls[file.name] = URL.createObjectURL(file.blob);
+        }
+        
         // If this is the first file, display it and show the dialog
         if (this.files.length === 1) {
             this.currentIndex = 0;
-            this.displayCurrentFile();
             this.show();
+            this.displayCurrentFile();
         } else {
             // Just refresh the navigation if already showing
             this._updateNavButtons();
@@ -332,61 +344,80 @@ class ReceiveDialog extends Dialog {
         if (this.files.length === 0) return;
         
         const file = this.files[this.currentIndex];
-        const url = URL.createObjectURL(file.blob);
+        let url = this.objectUrls[file.name];
         
-        // Clear the container
-        this.carouselContainer.innerHTML = '';
-        
-        // Create file display element
-        const fileItem = document.createElement('div');
-        fileItem.className = 'carousel-item';
-        
-        // File info
-        const fileInfo = document.createElement('div');
-        fileInfo.className = 'file-info';
-        
-        const fileName = document.createElement('div');
-        fileName.className = 'file-name';
-        fileName.textContent = file.name;
-        
-        const fileSize = document.createElement('div');
-        fileSize.className = 'file-size';
-        fileSize.textContent = this._formatFileSize(file.size);
-        
-        fileInfo.appendChild(fileName);
-        fileInfo.appendChild(fileSize);
-        fileItem.appendChild(fileInfo);
-        
-        // Preview if it's an image
-        if (file.mime.startsWith('image/')) {
-            const preview = document.createElement('div');
-            preview.className = 'preview';
-            
-            const image = document.createElement('img');
-            image.src = url;
-            image.alt = file.name;
-            image.className = 'carousel-image';
-            
-            preview.appendChild(image);
-            fileItem.appendChild(preview);
-        } else {
-            // Icon for non-image files
-            const fileIcon = document.createElement('div');
-            fileIcon.className = 'file-icon';
-            
-            const icon = document.createElement('i');
-            icon.className = this._getFileIconClass(file.mime);
-            
-            fileIcon.appendChild(icon);
-            fileItem.appendChild(fileIcon);
+        if (!url) {
+            url = URL.createObjectURL(file.blob);
+            this.objectUrls[file.name] = url;
         }
         
-        // Add to container
-        this.carouselContainer.appendChild(fileItem);
+        // Clear the container with a fade effect
+        this.carouselContainer.classList.add('fade-out');
         
-        // Update counter and navigation buttons
-        this._updateFileCounter();
-        this._updateNavButtons();
+        setTimeout(() => {
+            // Clear container after fade
+            this.carouselContainer.innerHTML = '';
+            
+            // Create file display element
+            const fileItem = document.createElement('div');
+            fileItem.className = 'carousel-item';
+            
+            // File info
+            const fileInfo = document.createElement('div');
+            fileInfo.className = 'file-info';
+            
+            const fileName = document.createElement('div');
+            fileName.className = 'file-name';
+            fileName.textContent = file.name;
+            
+            const fileSize = document.createElement('div');
+            fileSize.className = 'file-size';
+            fileSize.textContent = this._formatFileSize(file.size);
+            
+            fileInfo.appendChild(fileName);
+            fileInfo.appendChild(fileSize);
+            fileItem.appendChild(fileInfo);
+            
+            // Preview if it's an image
+            if (file.mime.startsWith('image/')) {
+                const preview = document.createElement('div');
+                preview.className = 'preview';
+                
+                const image = document.createElement('img');
+                image.src = url;
+                image.alt = file.name;
+                image.className = 'carousel-image';
+                
+                preview.appendChild(image);
+                fileItem.appendChild(preview);
+            } else {
+                // Icon for non-image files
+                const fileIcon = document.createElement('div');
+                fileIcon.className = 'file-icon';
+                
+                const icon = document.createElement('i');
+                icon.className = this._getFileIconClass(file.mime);
+                
+                fileIcon.appendChild(icon);
+                fileItem.appendChild(fileIcon);
+            }
+            
+            // Add to container
+            this.carouselContainer.appendChild(fileItem);
+            
+            // Fade back in
+            this.carouselContainer.classList.remove('fade-out');
+            this.carouselContainer.classList.add('fade-in');
+            
+            // Update counter and navigation buttons
+            this._updateFileCounter();
+            this._updateNavButtons();
+            
+            // Remove fade-in class after animation completes
+            setTimeout(() => {
+                this.carouselContainer.classList.remove('fade-in');
+            }, 300);
+        }, 150); // Slight delay to allow fade-out animation
     }
     
     // Show the next file in the carousel
@@ -472,7 +503,12 @@ class ReceiveDialog extends Dialog {
     
     // Download a single file
     downloadFile(file) {
-        const url = URL.createObjectURL(file.blob);
+        let url = this.objectUrls[file.name];
+        if (!url) {
+            url = URL.createObjectURL(file.blob);
+            this.objectUrls[file.name] = url;
+        }
+        
         const a = document.createElement('a');
         a.href = url;
         a.download = file.name;
@@ -480,8 +516,7 @@ class ReceiveDialog extends Dialog {
         a.click();
         document.body.removeChild(a);
         
-        // Clean up the URL object
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        // Don't revoke URL here, as we might need it again
     }
     
     // Download all files as a ZIP
@@ -518,7 +553,7 @@ class ReceiveDialog extends Dialog {
             document.body.removeChild(a);
             
             // Clean up
-            setTimeout(() => URL.revokeObjectURL(url), 100);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             
             // Show success message
             Events.fire('notify-user', 'ZIP file created successfully');
@@ -547,7 +582,13 @@ class ReceiveDialog extends Dialog {
     
     // Clear all files (called when needed)
     clearFiles() {
+        // Revoke all object URLs first to prevent memory leaks
+        Object.values(this.objectUrls).forEach(url => {
+            URL.revokeObjectURL(url);
+        });
+        
         this.files = [];
+        this.objectUrls = {};
         this.currentIndex = 0;
         this._updateFileCounter();
         this._updateNavButtons();
@@ -560,6 +601,17 @@ class ReceiveDialog extends Dialog {
         
         // Make sure buttons are properly updated when showing
         this._updateNavButtons();
+    }
+    
+    // Clean up resources when the component is destroyed
+    destroy() {
+        // Remove event listeners
+        window.removeEventListener('keydown', this._keyHandler);
+        
+        // Revoke object URLs
+        Object.values(this.objectUrls).forEach(url => {
+            URL.revokeObjectURL(url);
+        });
     }
 }
 
