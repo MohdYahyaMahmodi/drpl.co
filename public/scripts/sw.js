@@ -1,5 +1,5 @@
 // Service Worker for drpl.co
-const CACHE_NAME = 'drpl-cache-v4'; // Updated cache name to force refresh
+const CACHE_NAME = 'drpl-cache-v5'; // Updated cache name to force refresh
 
 // Assets to cache on install - use full paths based on your directory structure
 const STATIC_ASSETS = [
