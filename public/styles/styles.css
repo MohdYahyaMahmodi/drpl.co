@@ -1083,6 +1083,10 @@ footer {
   margin-bottom: 30px;
 }
 
+.about-details h2 {
+  margin-bottom: 6px;
+}
+
 .about-details h3 {
   font-size: 22px;
   font-weight: 500;
