@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Drpl.co - Instant File Sharing Between Devices | AirDrop Alternative</title>
+    <title>Drpl.co - Instant File Sharing Between Devices</title>
     <link rel="icon" type="image/png" href="images/favicon.png">
 
-    <!-- Primary Meta Tags - Optimized for SEO -->
+    <!-- Primary Meta Tags - Enhanced for better SEO -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#121212">
     <meta name="color-scheme" content="dark light">
-    <meta name="description" content="Free local network file sharing with no apps or accounts. Secure AirDrop alternative for Windows, Mac, iOS, Android & Linux with instant device discovery.">
-    <meta name="keywords" content="airdrop alternative, snapdrop alternative, local file sharing, cross-platform file transfer, wifi file transfer, p2p file sharing, no login file sharing">
-    <meta name="author" content="Drpl.co">
+    <meta name="description" content="Share files easily between any devices on the same WiFi. No apps or accounts needed. Works with Windows, Mac, iOS, Android. AirDrop for everyone.">
+    <meta name="keywords" content="airdrop alternative, snapdrop alternative, wifi file sharing, local file transfer">
+    <meta name="author" content="Mohd Mahmodi">
     
     <!-- Additional SEO tags -->
     <meta name="robots" content="index, follow">
@@ -21,25 +21,25 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- Open Graph / Facebook - Optimized -->
+    <!-- Open Graph / Facebook - Enhanced -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://drpl.co/">
-    <meta property="og:title" content="Drpl.co - Secure Local Network File Sharing | AirDrop Alternative">
+    <meta property="og:url" content="https://drpl.co">
+    <meta property="og:title" content="Drpl.co - Instant File Sharing Between Devices">
     <meta property="og:description" content="Transfer files between any devices on your local network. No apps, no accounts, no size limits. Works on all platforms with complete privacy.">
     <meta property="og:image" content="https://drpl.co/images/image.png">
     <meta property="og:site_name" content="Drpl.co">
 
-    <!-- Twitter - Optimized -->
+    <!-- Twitter - Enhanced -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://drpl.co/">
-    <meta property="twitter:title" content="Drpl.co - Local Network File Sharing">
-    <meta property="twitter:description" content="Share files between devices instantly. No setup, no accounts, complete privacy. The AirDrop alternative that works across all platforms.">
+    <meta property="twitter:url" content="https://drpl.co">
+    <meta property="twitter:title" content="Drpl.co - Instant File Sharing Between Devices">
+    <meta property="twitter:description" content="Transfer files between any devices on your local network. No apps, no accounts, no size limits. Works on all platforms with complete privacy.">
     <meta property="twitter:image" content="https://drpl.co/images/image.png">
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://drpl.co/">
+    <link rel="canonical" href="https://drpl.co">
 
-    <!-- PWA Support -->
+    <!-- Add these lines in the <head> section of your index.html -->
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -69,23 +69,23 @@
 </head>
 
 <body>
-    <!-- Splash Screen -->
+    <!-- Add this right after the <body> tag in your index.html -->
     <div class="splash-screen" id="splash-screen">
-      <img src="images/favicon.png" alt="drpl.co - local network file sharing" class="splash-logo">
+      <img src="images/favicon.png" alt="drpl.co" class="splash-logo">
     </div>
 
-    <!-- Background Animation Canvas -->
+    <!-- Background Animation Canvas - Visual element that creates a subtle animated background -->
     <canvas id="background-canvas"></canvas>
     
-    <!-- Header - Navigation and controls -->
+    <!-- Header - Contains navigation and controls -->
     <header>
         <div class="header-left">
-            <a href="https://github.com/MohdYahyaMahmodi/drpl.co" class="icon-button" target="_blank" rel="noopener" title="View drpl.co file sharing source code on GitHub">
+            <a href="https://github.com/MohdYahyaMahmodi/drpl.co" class="icon-button" target="_blank" rel="noopener" title="View drpl.co on GitHub">
                 <i class="fab fa-github"></i>
             </a>
         </div>
         <div class="header-right">
-            <button id="refresh-connection" class="icon-button" title="Refresh local network connections">
+            <button id="refresh-connection" class="icon-button" title="Refresh connections">
                 <i class="fas fa-sync"></i>
             </button>
             <button id="manual-refresh" class="icon-button" title="Refresh page">
@@ -94,29 +94,22 @@
             <button id="theme-toggle" class="icon-button" title="Toggle dark mode">
                 <i class="fas fa-sun"></i>
             </button>
-            <a href="#about" class="icon-button" title="About drpl.co - AirDrop alternative for all devices">
+            <a href="#about" class="icon-button" title="About drpl.co - AirDrop alternative">
                 <i class="fas fa-info-circle"></i>
             </a>
         </div>
     </header>
 
-    <!-- Main Content - Device Discovery Area -->
+    <!-- Peers Container - Main area that displays available devices -->
     <div id="peers-container" class="center">
         <div id="peers"></div>
         <div id="no-peers">
-            <h1>Local Network File Sharing</h1>
             <h2>Open drpl.co on your other devices to start sharing files.</h2>
-            <p>Devices on the same network appear here automatically. Simply click on a device to send files or messages.</p>
-            <div class="feature-highlights">
-                <p><i class="fas fa-check"></i> No installation required</p>
-                <p><i class="fas fa-check"></i> Works across all platforms</p>
-                <p><i class="fas fa-check"></i> Send files of any size</p>
-                <p><i class="fas fa-check"></i> End-to-end privacy</p>
-            </div>
+            <p>evices on the same network appear here automatically. Simply click on a device to send files or messages.</p>
         </div>
     </div>
 
-    <!-- Footer - User identification -->
+    <!-- Footer - Contains user display name info -->
     <footer>
         <div id="display-name"></div>
     </footer>
@@ -259,7 +252,7 @@
                 <div class="about-logo">
                     <img src="images/favicon.png" alt="drpl.co local file sharing">
                 </div>
-                <h1>drpl.co - Local Network File Sharing</h1>
+                <h2>drpl.co - Local Network File Sharing</h2>
                 <div class="about-tagline">
                     <p>The simple, secure way to share files between any devices on your local network.</p>
                 </div>
@@ -368,22 +361,17 @@
       "@type": "WebApplication",
       "name": "drpl.co",
       "url": "https://drpl.co",
-      "description": "Free local network file sharing that works between all devices. A cross-platform AirDrop alternative with no accounts, no apps, and complete privacy.",
+      "description": "A free, open-source AirDrop alternative and SnapDrop replacement for sharing files between any devices on the same network.",
       "applicationCategory": "UtilityApplication",
-      "operatingSystem": "Windows, macOS, iOS, Android, Linux",
+      "operatingSystem": "All",
       "offers": {
         "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "author": {
-        "@type": "Person",
-        "name": "MohdYahyaMahmodi"
+        "price": "0"
       },
       "about": {
         "@type": "Thing",
         "name": "Cross-platform file sharing",
-        "description": "Direct device-to-device file transfer on local networks"
+        "description": "Easy file transfer between devices on the same network"
       },
       "features": [
         "Cross-platform file sharing",
