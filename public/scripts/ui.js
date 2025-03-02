@@ -923,7 +923,9 @@ class ReceiveDialog extends Dialog {
         this._updateNavButtons();
         
         // Display the current file when showing the dialog
-        this.displayCurrentFile();
+        if (this.files.length > 0) {
+            this.displayCurrentFile();
+        }
     }
     
     /**
@@ -1308,33 +1310,39 @@ class TransferProgressDialog extends Dialog {
      * @param {number} fileSize - Size of first file
      */
     startTransfer(peerId, fileName, fileCount = 1, fileSize = 0) {
-        // Force reset any completed transfer for this peer
-        if (this.activeTransfers[peerId] && this.activeTransfers[peerId].completed) {
-            delete this.activeTransfers[peerId];
-        }
-        
+        // Create new transfer record or reset existing one
         this.activeTransfers[peerId] = {
             totalFiles: fileCount,
             currentFile: 1,
             fileName: fileName,
-            progress: 0,
+            progress: 0, // Initialize at 0
             fileSize: fileSize,
             bytesTransferred: 0,
             startTime: Date.now(),
             lastUpdateTime: Date.now(),
             lastBytes: 0,
-            speed: 0, // Initialize speed to 0
-            completed: false
+            speed: 0,
+            completed: false,
+            isSending: true // Flag that we're sending
         };
         
         // Set dialog title based on transfer direction
         $('transfer-title').textContent = 'Sending File' + (fileCount > 1 ? 's' : '');
         
+        // Update the visual representation
         this.updateUI(peerId);
-        this.show();
         
-        // Initialize speed display with empty string or "Calculating..."
+        // Make sure the progress percentage is reset to 0%
+        const progressElement = document.querySelector('.progress-percentage');
+        if (progressElement) {
+            progressElement.textContent = '0%';
+        }
+        
+        // Initialize speed display
         $('transfer-speed').textContent = 'Calculating...';
+        
+        // Show the dialog
+        this.show();
     }
     
     /**
@@ -1344,33 +1352,39 @@ class TransferProgressDialog extends Dialog {
      * @param {number} fileSize - File size
      */
     startReceiving(peerId, fileName, fileSize = 0) {
-        // Force reset any completed transfer for this peer
-        if (this.activeTransfers[peerId] && this.activeTransfers[peerId].completed) {
-            delete this.activeTransfers[peerId];
-        }
-        
+        // Create new transfer record or reset existing one
         this.activeTransfers[peerId] = {
             totalFiles: 1, // We might not know the total count yet
             currentFile: 1,
             fileName: fileName,
-            progress: 0,
+            progress: 0, // Initialize at 0
             fileSize: fileSize,
             bytesTransferred: 0,
             startTime: Date.now(),
             lastUpdateTime: Date.now(),
             lastBytes: 0,
-            speed: 0, // Initialize speed to 0
-            isReceiving: true,
-            completed: false
+            speed: 0,
+            completed: false,
+            isReceiving: true // Flag that we're receiving
         };
         
         // Set dialog title for receiving
         $('transfer-title').textContent = 'Receiving File';
         
+        // Update the visual representation
         this.updateUI(peerId);
         
-        // Initialize speed display with empty string or "Calculating..."
+        // Make sure the progress percentage is reset to 0%
+        const progressElement = document.querySelector('.progress-percentage');
+        if (progressElement) {
+            progressElement.textContent = '0%';
+        }
+        
+        // Initialize speed display
         $('transfer-speed').textContent = 'Calculating...';
+        
+        // Show the dialog
+        this.show();
     }
     
     /**
@@ -1380,59 +1394,64 @@ class TransferProgressDialog extends Dialog {
      * @param {number} bytesTransferred - Bytes transferred
      */
     updateProgress(peerId, progress, bytesTransferred = 0) {
-        if (!this.activeTransfers[peerId]) return;
-        
+        // Get the transfer record
         const transfer = this.activeTransfers[peerId];
+        if (!transfer) return;
         
         // Don't update if already completed
         if (transfer.completed) return;
         
+        // Store the progress value (0-1)
         transfer.progress = progress;
         
-        // Update bytes transferred
+        // Update bytes transferred for speed calculation
         if (bytesTransferred > 0) {
             transfer.bytesTransferred = bytesTransferred;
         } else if (transfer.fileSize && progress > 0) {
-            // If bytesTransferred not provided but we know file size and progress
+            // Calculate based on progress if not provided
             transfer.bytesTransferred = Math.floor(transfer.fileSize * progress);
         }
         
-        // Calculate transfer speed
+        // Calculate and update transfer speed
         const now = Date.now();
         const timeDiff = (now - transfer.lastUpdateTime) / 1000; // Convert to seconds
         
-        if (timeDiff >= 0.5) { // Update every 500ms
+        // Only update speed every 0.5 seconds to avoid flicker
+        if (timeDiff >= 0.5) {
             // Calculate bytes transferred since last update
             const bytesDiff = transfer.bytesTransferred - transfer.lastBytes;
             
             if (bytesDiff > 0) {
-                // Calculate speed in bytes per second
+                // Calculate instantaneous speed in bytes per second
                 const instantSpeed = bytesDiff / timeDiff;
                 
-                // Smooth the speed calculation with exponential moving average
-                // Use previous speed as a baseline if it exists
+                // Use weighted average for smoother display
                 if (transfer.speed > 0) {
-                    // 70% new speed, 30% old speed for smoother display
+                    // 70% new speed, 30% old speed for smoother updates
                     transfer.speed = (0.7 * instantSpeed) + (0.3 * transfer.speed);
                 } else {
                     transfer.speed = instantSpeed;
                 }
                 
-                // Update UI with the new speed
+                // Update the speed display
                 this.updateSpeedDisplay(transfer.speed);
             }
             
-            // Update timestamps and bytes for next calculation
+            // Update the last update time and bytes for next calculation
             transfer.lastUpdateTime = now;
             transfer.lastBytes = transfer.bytesTransferred;
         }
         
+        // Update the UI with new progress
         this.updateUI(peerId);
         
-        // Auto-close if transfer completed
-        if (progress >= 1) {
-            // Don't mark as completed yet - wait for endTransfer to be called
-            // This is to ensure we show the 100% state briefly
+        // If progress reached 100% and we're sending, mark as completed
+        // For receiving, we wait for endTransfer to be called
+        if (progress >= 1 && transfer.isSending) {
+            // Give a short delay to show the 100% state
+            setTimeout(() => {
+                this.endTransfer(peerId);
+            }, 500);
         }
     }
     
@@ -1458,14 +1477,14 @@ class TransferProgressDialog extends Dialog {
         
         // Check if all active transfers are completed
         const allCompleted = Object.values(this.activeTransfers).every(transfer => 
-            transfer.completed
+            transfer.completed === true
         );
         
         if (allCompleted) {
             // Give a short delay to show completion state before closing
             setTimeout(() => {
                 this.hide();
-            }, 1500);
+            }, 1000);
         }
     }
     
@@ -1477,20 +1496,29 @@ class TransferProgressDialog extends Dialog {
     nextFile(peerId, fileName) {
         if (!this.activeTransfers[peerId]) return;
         
-        // Reset completed state for the next file
-        this.activeTransfers[peerId].completed = false;
-        this.activeTransfers[peerId].currentFile++;
-        this.activeTransfers[peerId].progress = 0;
-        this.activeTransfers[peerId].bytesTransferred = 0;
-        this.activeTransfers[peerId].lastBytes = 0;
-        this.activeTransfers[peerId].speed = 0;
-        this.activeTransfers[peerId].lastUpdateTime = Date.now();
+        const transfer = this.activeTransfers[peerId];
+        
+        // Reset progress for the next file
+        transfer.completed = false;
+        transfer.currentFile++;
+        transfer.progress = 0;
+        transfer.bytesTransferred = 0;
+        transfer.lastBytes = 0;
+        transfer.speed = 0;
+        transfer.lastUpdateTime = Date.now();
         
         if (fileName) {
-            this.activeTransfers[peerId].fileName = fileName;
+            transfer.fileName = fileName;
         }
         
+        // Update the UI with reset progress
         this.updateUI(peerId);
+        
+        // Reset progress percentage to 0%
+        const progressElement = document.querySelector('.progress-percentage');
+        if (progressElement) {
+            progressElement.textContent = '0%';
+        }
         
         // Reset speed display
         $('transfer-speed').textContent = 'Calculating...';
@@ -1505,17 +1533,31 @@ class TransferProgressDialog extends Dialog {
         if (!transfer) return;
         
         // Update file counter
-        $('current-transfer-file').textContent = transfer.currentFile;
-        $('total-transfer-files').textContent = transfer.totalFiles;
+        const currentFileElement = $('current-transfer-file');
+        const totalFilesElement = $('total-transfer-files');
+        
+        if (currentFileElement && totalFilesElement) {
+            currentFileElement.textContent = transfer.currentFile;
+            totalFilesElement.textContent = transfer.totalFiles;
+        }
         
         // Update filename
-        $('transfer-filename').textContent = transfer.fileName || '';
+        const filenameElement = $('transfer-filename');
+        if (filenameElement) {
+            filenameElement.textContent = transfer.fileName || '';
+        }
         
         // Update progress percentage
-        const percentage = Math.round(transfer.progress * 100);
         const progressElement = document.querySelector('.progress-percentage');
         if (progressElement) {
+            const percentage = Math.round(transfer.progress * 100);
             progressElement.textContent = `${percentage}%`;
+            
+            // Also update spinner visual if present
+            const spinnerRing = document.querySelector('.spinner-ring');
+            if (spinnerRing) {
+                spinnerRing.style.setProperty('--progress', `${percentage}%`);
+            }
         }
     }
     
@@ -1554,11 +1596,11 @@ class TransferProgressDialog extends Dialog {
         // Set progress to 100% for UI consistency
         this.activeTransfers[peerId].progress = 1;
         
-        // Mark this transfer as completed
-        this.activeTransfers[peerId].completed = true;
-        
         // Update the UI to show 100%
         this.updateUI(peerId);
+        
+        // Mark as completed
+        this.activeTransfers[peerId].completed = true;
         
         // Check if we should hide the dialog
         this.checkAndHideIfDone();
@@ -1570,13 +1612,9 @@ class TransferProgressDialog extends Dialog {
     hide() {
         super.hide();
         
-        // Don't immediately clear transfers - keep them around for a bit
-        // This helps with the case where a new transfer starts right after
-        // the old one completes - we want different transfers, not to reuse the same one
-        
-        // Schedule a delayed cleanup
+        // Schedule cleanup of completed transfers
         setTimeout(() => {
-            // Only clean up completed transfers
+            // Clean up completed transfers
             for (const peerId in this.activeTransfers) {
                 if (this.activeTransfers[peerId].completed) {
                     delete this.activeTransfers[peerId];
